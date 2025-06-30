@@ -1,0 +1,11 @@
+data:
+  data_path: data/raw_data/raw_data.parquet
+
+model:
+  dir: model/saved_model
+  files:
+    - config.json
+    - tokenizer_config.json
+    - special_tokens_map.json
+    - pytorch_model.bin
+    - tokenizer.json
