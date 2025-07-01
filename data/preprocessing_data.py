@@ -4,7 +4,10 @@ and clinical note summarization.
 """
 
 import re
+import logging
 
+
+logger = logging.getLogger(__name__)
 
 def remove_blank_sections(note: str, sections_headers: list[str] = None) -> str:
     """
@@ -20,6 +23,7 @@ def remove_blank_sections(note: str, sections_headers: list[str] = None) -> str:
     """
 
     if sections_headers is None:
+        logger.info("Using default section headers to clean data")
         sections_headers = [
             "Name:", "Unit No:", "Admission Date:", 
             "Discharge Date:", "Date of Birth", "Attending:",
@@ -33,13 +37,17 @@ def remove_blank_sections(note: str, sections_headers: list[str] = None) -> str:
     while i < len(lines):
         line = lines[i].strip()
 
+        if line == "":
+            i +=1
+            continue
+
         if any(header.lower() in line.lower() for header in sections_headers):
             # Captures and removes sections followed by underscore blanks
-            if re.match(r".*:\s*_+\s*$", line):
+            if re.fullmatch(r".*:\s*_+\s*", line):
                 i += 1
                 continue
             # Captures and removes sections with underscore blanks on the following line
-            elif i + 1 < len(lines) and re.match(r"^_+\s*$", lines[i + 1].strip()):
+            elif i + 1 < len(lines) and re.fullmatch(r"^_+\s*", lines[i + 1].strip()):
                 i += 2
                 continue
             # Catch all for a header that should be removed
