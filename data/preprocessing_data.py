@@ -77,9 +77,12 @@ def normalize_deidentified_blanks(text: str) -> str:
         r"\b_{2,}\s*(years?\s*old|y\.?o\.?|y/o|yo)": "<AGE>",
         r"\b_{2,}-years?-old\b": "<AGE>",
         r"\b(mrs?|ms)\.?\s_{2,}": "<PATIENT>",
-        r"\b(doctor|dr.?)\s_{2,}": "<DOCTOR>"
+        r"\b(doctor|dr.?)\s_{2,}": "<DOCTOR>",
+
     }
 
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
+    text = re.sub(r"\b_{2,}\b", "<REDACTED>", text) # Clean up for remaining unknown de-identified fields
     return text

@@ -35,3 +35,24 @@ def test_normalize_deidentified_blanks():
     actual = preprocessing_data.normalize_deidentified_blanks(input)
 
     assert actual == expected
+
+def test_normalize_deidentified_blanks_unknown_fields():
+
+    input = "___ experienced by Ms. ___ indicates a continuing occurance of ___."
+
+    expected = "<REDACTED> experienced by <PATIENT> indicates a continuing occurance of <REDACTED>."
+
+    actual = preprocessing_data.normalize_deidentified_blanks(input)
+
+    assert actual == expected
+
+def test_remove_normalize_blanks_process():
+
+    input = "Name: ___ Unit No: ___\nDescription: ___ experienced by Ms. ___ indicates a continuing occurance of ___.\nSocial History:\n___"
+
+    expected = "Description: <REDACTED> experienced by <PATIENT> indicates a continuing occurance of <REDACTED>."
+
+    actual = preprocessing_data.remove_blank_sections(input)
+    actual = preprocessing_data.normalize_deidentified_blanks(actual)
+
+    assert actual == expected
