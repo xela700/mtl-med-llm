@@ -25,3 +25,13 @@ def test_remove_blank_sections_custom_headers():
     actual = preprocessing_data.remove_blank_sections(note=input, sections_headers=custom_headers)
 
     assert actual == expected
+
+def test_normalize_deidentified_blanks():
+
+    input = "Mr. ___, a ___ y/o man was admitted yesterday and was seen by doctor ___."
+
+    expected = "<PATIENT>, a <AGE> man was admitted yesterday and was seen by <DOCTOR>."
+
+    actual = preprocessing_data.normalize_deidentified_blanks(input)
+
+    assert actual == expected

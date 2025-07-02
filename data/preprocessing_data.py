@@ -60,3 +60,26 @@ def remove_blank_sections(note: str, sections_headers: list[str] = None) -> str:
             i += 1
     
     return "\n".join(cleaned)
+
+
+def normalize_deidentified_blanks(text: str) -> str:
+    """
+    Inserts standard placeholder text inplace of de-identified blanks where applicable
+
+    Parameters:
+    text (str): Input text w/ de-identified blanks from MIMIC notes
+
+    Returns:
+    str: Text w/ replacement placeholders for training
+    """
+
+    replacements = {
+        r"\b_{2,}\s*(years?\s*old|y\.?o\.?|y/o|yo)": "<AGE>",
+        r"\b_{2,}-years?-old\b": "<AGE>",
+        r"\b(mrs?|ms)\.?\s_{2,}": "<PATIENT>",
+        r"\b(doctor|dr.?)\s_{2,}": "<DOCTOR>"
+    }
+
+    for pattern, replacement in replacements.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return text
