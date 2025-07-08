@@ -86,3 +86,32 @@ def normalize_deidentified_blanks(text: str) -> str:
     
     text = re.sub(r"\b_{2,}\b", "<REDACTED>", text) # Clean up for remaining unknown de-identified fields
     return text
+
+
+def classification_extract_sections(text: str, sections: list[str] = None) -> str:
+    """
+    Captures relevant sections for ICD code classification. Used to limit the input size of a given sample while minimizing
+    context loss. Only intended for classification task and not summarization.
+
+    Parameters:
+    text (str): Input discharge notes with extractable sections
+    sections (list[str]): sections to keep from text. If none provided, a default set is used
+
+    Returns:
+    str: Extracted sections from text joined together 
+    """
+
+    if sections is None:
+        sections = ['discharge diagnosis', 'brief hospital course', 'hospital course',
+                    'final diagnosis', 'principal diagnosis', 'history of present illness']
+    
+    parsed_text = {}
+
+    for section in sections:
+        # Pattern captures everything after the name of the section up until either the next section title or EOF
+        pattern = rf'{section.lower()}[\s:\n](.*?)(\n[A-Z][^:\n]*:|\Z)'
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            parsed_text[section] = match.group(1).strip()
+    
+    return ' '.join(filter(None, parsed_text.values()))
