@@ -5,37 +5,36 @@ and clinical note summarization.
 
 import re
 import logging
+from abc import ABC, abstractmethod
 from transformers import AutoTokenizer
 from transformers import DataCollatorWithPadding
-from datasets import load_dataset
-from torch.utils.data import Dataset
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 
 logger = logging.getLogger(__name__)
 
-class TextPreprocessor:
+class TextPreprocessor(ABC):
     """
     Parent class for preprocessing text imported from dataset.
 
     Attributes:
     checkpoint (str): The associated HuggingFace model. Must match model used in training.
     text_col (str): Column that contains the text to be cleaned and tokenized
-    section_headers (list[str]): Optional section headers used to remove sections of clinical
+    remove_sections (list[str]): Optional section headers used to remove sections of clinical
     notes. Default of 'None' results in removal of sections that will always be blank due to 
     de-identification
     """
 
-    __slots__ = ("tokenizer", "text_col", "section_headers")
+    __slots__ = ("tokenizer", "text_col", "remove_sections")
 
-    def __init__(self, checkpoint: str, text_col: str, sections_headers: list[str] = None):
-        self.tokenizer = self._tokenize_data(checkpoint)
+    def __init__(self, checkpoint: str, text_col: str, remove_sections: list[str] = None):
+        self.tokenizer = self._create_tokenizer(checkpoint)
         self.text_col = text_col
-        self.section_headers = sections_headers
+        self.remove_sections = remove_sections
         self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
 
     
-    def _tokenize_data(self, checkpoint: str) -> PreTrainedTokenizerBase:
+    def _create_tokenizer(self, checkpoint: str) -> PreTrainedTokenizerBase:
         """
         Initializes the tokenizer to be used in preprocessing.
 
@@ -70,9 +69,9 @@ class TextPreprocessor:
         str: clinical note stripped of blank sections
         """
 
-        if self.sections_headers is None:
-            logger.info("Using default section headers to clean data")
-            self.sections_headers = [
+        if self.remove_sections is None:
+            logger.info("Using default removable sections to remove always de-identified sections.")
+            self.remove_sections = [
                 "Name:", "Unit No:", "Admission Date:", 
                 "Discharge Date:", "Date of Birth", "Attending:",
                 "Social History:", "Followup Instructions:", "Facility:" 
@@ -89,7 +88,7 @@ class TextPreprocessor:
                 i +=1
                 continue
 
-            if any(header.lower() in line.lower() for header in self.sections_headers):
+            if any(header.lower() in line.lower() for header in self.remove_sections):
                 # Captures and removes sections followed by underscore blanks
                 if re.fullmatch(r".*:\s*_+\s*", line):
                     i += 1
@@ -135,50 +134,85 @@ class TextPreprocessor:
         text = re.sub(r"\b_{2,}\b", "<REDACTED>", text) # Clean up for remaining unknown de-identified fields
         return text
     
-
-    def tokenize_function(self, batch: dict[list[str]]):
+    
+    @abstractmethod
+    def preprocess_function(self, batch: dict) -> dict[str, list[int]]:
         """
-        Tokenizer function to be mapped using dataset.
+        Preprocessing method that may vary depending on NLP task. To be determined by child classes.
+        Intended for use with dataset.map()
 
         Parameters:
-        batch (dict[list[str]]): 
+        batch (dict): batch on which the preprocess function will be applied
 
         Returns:
-        Tokenized return based on tokenizer usage.
+        dictionary structure expected by dataset.map()
+        """
+        pass
+    
+
+
+class ClassificationPreprocessor(TextPreprocessor):
+
+    __slots__ = ("label_ids", "extract_sections", "label_col")
+
+    def __init__(self, checkpoint: str, label_ids: dict[str:int], text_col: str, label_col: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
+        super().__init__(checkpoint, text_col, remove_sections)
+        self.extract_sections = extract_sections
+        self.label_ids = label_ids
+        self.label_col = label_col
+
+    def classification_extract_sections(self, text: str) -> str:
+        """
+        Captures relevant sections for ICD code classification. Used to limit the input size of a given sample while minimizing
+        context loss. Only intended for classification task and not summarization.
+
+        Parameters:
+        text (str): Input discharge notes with extractable sections
+        sections (list[str]): sections to keep from text. If none provided, a default set is used
+
+        Returns:
+        str: Extracted sections from text joined together 
         """
 
-        return self.tokenizer(batch[self.text_col], truncation=True)
+        if self.extract_sections is None:
+            logger.info("Using default sections to extract data for classification.")
+            self.extract_sections = ['discharge diagnosis', 'brief hospital course', 'hospital course',
+                        'final diagnosis', 'principal diagnosis', 'history of present illness']
+        
+        parsed_text = {}
+
+        for section in self.extract_sections:
+            # Pattern captures everything after the name of the section up until either the next section title or EOF
+            pattern = rf'{section.lower()}[\s:\n](.*?)(\n[A-Z][^:\n]*:|\Z)'
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                parsed_text[section] = match.group(1).strip()
+        
+        return ' '.join(filter(None, parsed_text.values()))
     
+    def preprocess_function(self, batch: dict[list[str]]) -> dict[str, list[int]]:
+        """
+        Preprocess function to be mapped using dataset specific to classification task.
 
+        Parameters:
+        batch (dict[list[str]]): batch from dataset
 
+        Returns:
+        Modified data in dataset. Text field tokenized based on tokenizer.
+        Multi-hot label vectors created using top k labels.
+        """
 
-def classification_extract_sections(text: str, sections: list[str] = None) -> str:
-    """
-    Captures relevant sections for ICD code classification. Used to limit the input size of a given sample while minimizing
-    context loss. Only intended for classification task and not summarization.
+        tokenized_data = self.tokenizer(batch[self.text_col], truncation=True)
 
-    Parameters:
-    text (str): Input discharge notes with extractable sections
-    sections (list[str]): sections to keep from text. If none provided, a default set is used
+        labels = [0] * len(self.label_ids)
+        for id in batch[self.label_col]:
+            if id in self.label_ids:
+                labels[self.label_ids[id]] = 1
+        tokenized_data["labels"] = labels
 
-    Returns:
-    str: Extracted sections from text joined together 
-    """
-
-    if sections is None:
-        sections = ['discharge diagnosis', 'brief hospital course', 'hospital course',
-                    'final diagnosis', 'principal diagnosis', 'history of present illness']
+        return tokenized_data
     
-    parsed_text = {}
-
-    for section in sections:
-        # Pattern captures everything after the name of the section up until either the next section title or EOF
-        pattern = rf'{section.lower()}[\s:\n](.*?)(\n[A-Z][^:\n]*:|\Z)'
-        match = re.search(pattern, text, re.DOTALL)
-        if match:
-            parsed_text[section] = match.group(1).strip()
-    
-    return ' '.join(filter(None, parsed_text.values()))
+    # Add filtering function for text w/o any labels present in top k labels
 
 
 
