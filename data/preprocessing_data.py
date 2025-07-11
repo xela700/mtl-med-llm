@@ -152,6 +152,9 @@ class TextPreprocessor(ABC):
 
 
 class ClassificationPreprocessor(TextPreprocessor):
+    """
+    Preprocessor child class for 
+    """
 
     __slots__ = ("label_ids", "extract_sections", "label_col")
 
@@ -190,9 +193,10 @@ class ClassificationPreprocessor(TextPreprocessor):
         
         return ' '.join(filter(None, parsed_text.values()))
     
-    def preprocess_function(self, batch: dict[list[str]]) -> dict[str, list[int]]:
+    def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
         """
         Preprocess function to be mapped using dataset specific to classification task.
+        To be used with dataset.map() method.
 
         Parameters:
         batch (dict[list[str]]): batch from dataset
@@ -212,7 +216,20 @@ class ClassificationPreprocessor(TextPreprocessor):
 
         return tokenized_data
     
-    # Add filtering function for text w/o any labels present in top k labels
+
+    def filter_text_by_label(self, sample: dict[str, list[str]]) -> bool:
+        """
+        Filtering method to check for the presence of one (or more) ICD labels that are being used during
+        training. To be used with dataset.filter() method
+
+        Parameters:
+        sample: dataset sample being provided to check for label presence
+
+        Return:
+        bool: true if at least one label is present
+        """
+        icd_codes = sample.get("labels", []) # gets the labels associated with a clinical note, or an empty list if none present
+        return any(code in self.label_ids for code in icd_codes)
 
 
 
