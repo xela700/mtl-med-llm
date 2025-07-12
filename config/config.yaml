@@ -1,5 +1,36 @@
 data:
-  data_path: data/raw_data/raw_data.parquet
+  task_1:
+    description: "Fetch ICD-10 codes and discharge notes from MIMIC-IV for classification. Cleaned data should have base preprocessing"
+    query: >
+      SELECT h.subject_id, h.hadm_id, n.text AS discharge_note, ARRAY_AGG(h.icd_code) AS icd_codes
+      FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` AS h
+        JOIN `physionet-data.mimiciv_note.discharge` AS n 
+        ON (h.subject_id = n.subject_id) AND (h.hadm_id = n.hadm_id)
+      WHERE h.icd_version = 10
+      GROUP BY h.subject_id, h.hadm_id, n.text
+    data_path: data/raw_data/classification_data.parquet
+    clean_path: data/cleaned_data/classification_data.parquet
+  
+  task_2:
+    description: "Fetch top 2,000 ICD codes for classification"
+    query: >
+      SELECT icd_code, COUNT(*) AS count
+      FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
+      WHERE icd_version = 10
+      GROUP BY icd_code
+      ORDER BY count DESC
+      LIMIT 2000
+    data_path: data/raw_data/code_freq_data.parquet
+  
+  task_3:
+    description: "Fetch 10,000 random discharge notes for summarization. Cleaned data should have base preprocessing, along extracted real/synthetic summaries and associated tags."
+    query: >
+      SELECT text AS discharge_note
+      FROM `physionet-data.mimiciv_note.discharge`
+      WHERE MOD(ABS(FARM_FINGERPRINT(CAST(note_id AS STRING))), 100) < 33
+    data_path: data/raw_data/summarization_data.parquet
+    clean_path: data/cleaned_data/summarization_data.parquet
+    full_path: data/cleaned_data/summarization_data_with_targets.parquet
 
 model:
   dir: model/saved_model

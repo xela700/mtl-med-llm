@@ -12,6 +12,8 @@ env/
 # --- Data / Model Files ---
 data/raw_data
 !data/raw_data/README.md
+data/cleaned_data
+!data/cleaned_data/README.md
 model/saved_model
 !model/saved_model/README.md
 results/reporting
