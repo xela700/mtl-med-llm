@@ -2,10 +2,12 @@
 Testing module for both fetching and preprocessing data, to ensure proper outputs are being achieved.
 """
 
-import data.fetch_data as fetch
+from data import fetch_data
 from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor
-import logging
+from datasets import Dataset
 import pandas as pd
+import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +23,17 @@ def test_classification_input():
     LIMIT 5
     """
 
-    save_path_text = "tests/data/classification_raw_data.parquet"
+    save_path_text = "tests/test_data/classification_raw_data.parquet"
 
-    fetch.fetch_and_save_query(query=query_text, save_path=save_path_text) # raw data
+    if not os.path.exists(save_path_text):
+        fetch_data.fetch_and_save_query(query=query_text, save_path=save_path_text) # raw data
 
-    raw_data = fetch.load_data(load_path=save_path_text)
+    raw_data = fetch_data.load_data(load_path=save_path_text)
 
-    raw_data.rename(columns={'text': 'input', 'icd_code': 'labels'})
+    raw_data.rename(columns={'discharge_note': 'input', 'icd_codes': 'labels'}, inplace=True)
 
     print(raw_data.head(1))
+    print(raw_data['input'].dtype)
 
     query_labels = """
     SELECT icd_code, COUNT(*) AS count
@@ -40,13 +44,14 @@ def test_classification_input():
     LIMIT 5
     """
 
-    save_path_labels = "tests/data/classification_label_data.parquet"
+    save_path_labels = "tests/test_data/classification_label_data.parquet"
 
-    fetch.fetch_and_save_query(query=query_labels, save_path=save_path_labels)  # label data
+    if not os.path.exists(save_path_labels):
+        fetch_data.fetch_and_save_query(query=query_labels, save_path=save_path_labels)  # label data
 
-    label_data = fetch.load_data(load_path=save_path_labels)
+    label_data = fetch_data.load_data(load_path=save_path_labels)
 
-    label_data.rename(columns={'icd_code': 'labels'})
+    label_data.rename(columns={'icd_code': 'labels'}, inplace=True)
 
     print(label_data.head())
 
@@ -56,4 +61,17 @@ def test_classification_input():
     preprocessor = ClassificationPreprocessor("bert-base-cased", label_ids=label_ids, text_col='input', label_col='labels')
     logger.info("Instantiated classification preprocessor")
 
-    
+    logger.info("Testing Remove Blank Sections")
+    raw_data['input'] = raw_data['input'].map(preprocessor.remove_blank_sections)
+
+    logger.info("Testing Normalize Deidentified Sections")
+    raw_data['input'] = raw_data['input'].map(preprocessor.normalize_deidentified_blanks)
+
+    logger.info("Testing Classification Section Extraction")
+    raw_data['input'] = raw_data['input'].map(preprocessor.classification_extract_sections)
+
+    print(raw_data['input'].head())
+
+if __name__ == "__main__":
+    test_classification_input()
+

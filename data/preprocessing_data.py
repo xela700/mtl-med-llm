@@ -55,7 +55,7 @@ class TextPreprocessor(ABC):
         
         return tokenizer
 
-    def remove_blank_sections(self, note: str) -> str:
+    def remove_blank_sections(self, text: str) -> str:
         """
         Removed redacted sections from MIMIC data that occur as a result of the
         deindentification process.
@@ -75,7 +75,7 @@ class TextPreprocessor(ABC):
                 "Social History:", "Followup Instructions:", "Facility:" 
             ]
         
-        lines = note.split("\n")
+        lines = text.split("\n")
         cleaned = []
         i = 0
 
@@ -214,13 +214,23 @@ class ClassificationPreprocessor(TextPreprocessor):
         Multi-hot label vectors created using top k labels.
         """
 
-        tokenized_data = self.tokenizer(batch[self.text_col], truncation=True)
+        processed_texts = []
+        for text in batch[self.text_col]:
+            text = self.remove_blank_sections(text)
+            text = self.normalize_deidentified_blanks(text)
+            text = self.classification_extract_sections(text)
+            processed_texts.append(text)
 
-        labels = [0] * len(self.label_ids)
-        for id in batch[self.label_col]:
-            if id in self.label_ids:
-                labels[self.label_ids[id]] = 1
-        tokenized_data["labels"] = labels
+        tokenized_data = self.tokenizer(processed_texts, truncation=True, return_tensors=None)
+
+        multi_hot_labels = []
+        for labels in batch[self.label_col]:
+            label_vector = [0] * len(self.label_ids)
+            for label in labels:
+                if label in self.label_ids:
+                    label_vector[self.label_ids[label]] = 1
+            multi_hot_labels.append(label_vector)
+        tokenized_data["labels"] = multi_hot_labels
 
         return tokenized_data
     
@@ -238,6 +248,9 @@ class ClassificationPreprocessor(TextPreprocessor):
         """
         icd_codes = sample.get("labels", []) # gets the labels associated with a clinical note, or an empty list if none present
         return any(code in self.label_ids for code in icd_codes)
+    
+        
+
 
 
 class SummarizationPreprocessor(TextPreprocessor):

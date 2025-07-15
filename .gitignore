@@ -18,6 +18,8 @@ model/saved_model
 !model/saved_model/README.md
 results/reporting
 !results/reporting/README.md
+tests/test_data
+!tests/test_data/README.md
 *.json
 *.parquet
 *.csv

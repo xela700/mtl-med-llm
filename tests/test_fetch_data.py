@@ -39,7 +39,7 @@ def test_fetch_and_save_query_valid():
     FROM `physionet-data.mimiciii_demo.admissions`
     LIMIT 1
     """
-    save_path = "tests/data/test_data.parquet"
+    save_path = "tests/test_data/test_data.parquet"
 
     fetch_data.fetch_and_save_query(query=query, save_path=save_path)
 
@@ -49,7 +49,7 @@ def test_fetch_and_save_query_valid():
 def test_fetch_and_save_query_bad_query():
     
     query = "lorem ipsum"
-    save_path = "tests/data/test_data.parquet"
+    save_path = "tests/test_data/test_data.parquet"
 
     with pytest.raises(ValueError):
         fetch_data.fetch_and_save_query(query=query, save_path=save_path)
@@ -70,7 +70,7 @@ def test_fetch_and_save_query_bad_path():
 
 def test_load_data_valid():
 
-    load_path = "tests/data/test_data.parquet"
+    load_path = "tests/test_data/test_data.parquet"
 
     df = fetch_data.load_data(load_path=load_path)
 
@@ -81,7 +81,7 @@ def test_load_data_valid():
 
 def test_load_data_bad_path():
 
-    load_path = "tests/data/testy_data.parquet"
+    load_path = "tests/test_data/testy_data.parquet"
 
     with pytest.raises(FileNotFoundError):
         fetch_data.load_data(load_path=load_path)
@@ -89,7 +89,7 @@ def test_load_data_bad_path():
 
 def test_load_data_wrong_ftype():
 
-    load_path = "tests/data/empty_data.csv"
+    load_path = "tests/test_data/empty_data.csv"
 
     with pytest.raises((ArrowInvalid, ValueError)):
         fetch_data.load_data(load_path=load_path)
