@@ -12,18 +12,18 @@ data:
     clean_path: data/cleaned_data/classification_data.parquet
   
   task_2:
-    description: "Fetch top 2,000 ICD codes for classification"
+    description: "Fetch top 5,000 ICD codes for classification"
     query: >
       SELECT icd_code, COUNT(*) AS count
       FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
       WHERE icd_version = 10
       GROUP BY icd_code
       ORDER BY count DESC
-      LIMIT 2000
+      LIMIT 5000
     data_path: data/raw_data/code_freq_data.parquet
   
   task_3:
-    description: "Fetch 10,000 random discharge notes for summarization. Cleaned data should have base preprocessing, along extracted real/synthetic summaries and associated tags."
+    description: "Fetch ~10,000 random discharge notes for summarization. Cleaned data should have base preprocessing, along extracted real/synthetic summaries and associated tags."
     query: >
       SELECT text AS discharge_note
       FROM `physionet-data.mimiciv_note.discharge`
