@@ -47,6 +47,7 @@ def fetch_and_save_query(query: str, save_path: str = None) -> None:
         query_job = client.query(query=query)
         df = query_job.to_dataframe()
         df.to_parquet(save_path)
+        logger.info(f"Saved data to {save_path}")
     except (ArrowInvalid, ValueError, OSError) as err:
         logger.error(f"Data failed to save: {err}")
         raise ValueError(f"Invalid parquet file format at {load_data}") from err

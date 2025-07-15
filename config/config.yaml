@@ -4,7 +4,7 @@ data:
     query: >
       SELECT h.subject_id, h.hadm_id, n.text AS discharge_note, ARRAY_AGG(h.icd_code) AS icd_codes
       FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd` AS h
-        JOIN `physionet-data.mimiciv_note.discharge` AS n 
+      JOIN `physionet-data.mimiciv_note.discharge` AS n 
         ON (h.subject_id = n.subject_id) AND (h.hadm_id = n.hadm_id)
       WHERE h.icd_version = 10
       GROUP BY h.subject_id, h.hadm_id, n.text
