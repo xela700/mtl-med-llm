@@ -31,7 +31,7 @@ class TextPreprocessor(ABC):
 
     __slots__ = ("tokenizer", "text_col", "remove_sections", "cleaned_path")
 
-    def __init__(self, checkpoint: str, text_col: str, remove_sections: list[str] = None, cleaned_path: str = None):
+    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, remove_sections: list[str] = None):
         self.tokenizer = self._create_tokenizer(checkpoint)
         self.text_col = text_col
         self.remove_sections = remove_sections
@@ -181,8 +181,8 @@ class ClassificationPreprocessor(TextPreprocessor):
 
     __slots__ = ("label_ids", "extract_sections", "label_col", "data_collator")
 
-    def __init__(self, checkpoint: str, label_ids: dict[str:int], text_col: str, label_col: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
-        super().__init__(checkpoint, text_col, remove_sections)
+    def __init__(self, checkpoint: str, label_ids: dict[str:int], text_col: str, label_col: str, cleaned_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
+        super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
         self.extract_sections = extract_sections
         self.label_ids = label_ids
         self.label_col = label_col
@@ -303,8 +303,8 @@ class SummarizationPreprocessor(TextPreprocessor):
 
     __slots__ = ("target_col", "source_type_col", "data_collator")
 
-    def __init__(self, checkpoint: str, text_col: str, target_col: str, source_type_col: str, remove_sections: list[str] = None):
-        super().__init__(checkpoint, text_col, remove_sections)
+    def __init__(self, checkpoint: str, text_col: str, target_col: str, source_type_col: str, cleaned_path: str, remove_sections: list[str] = None):
+        super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
         self.target_col = target_col
         self.source_type_col = source_type_col
         self.data_collator = DataCollatorForSeq2Seq(tokenizer=checkpoint, model=checkpoint, padding=True)
@@ -341,7 +341,65 @@ class SummarizationPreprocessor(TextPreprocessor):
         return tokenized_data
 
 
+class SummarizationTargetPreprocessor(TextPreprocessor):
+    """
+    Preprocessor for raw data intended for summarization. Used to clean data and prepare for input into LLM to create synthetic targets.
+    """
 
+    __slots__ = ("data_collator", "extract_sections")
+
+    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
+        super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
+        self.extract_sections = extract_sections
+        self.data_collator = DataCollatorForSeq2Seq(tokenizer=checkpoint, model=checkpoint, padding=True)
+
+    
+    def _extract_from_text(self, text: str, extract_sections: list[str]) -> str | None:
+        """
+        Helper function for extract_target. Extracts sections from text and returns them if they exist in a combined 
+        format. (Only one should exist)
+
+        Parameters:
+        text (str): text to have portion(s) extracted
+        extract_sections (list[str]): section(s) being extracted from text
+
+        Returns:
+        str: text from extracted sections
+        None: returns nothing if section doesn't exist
+        """
+
+        parsed_text = {}
+        for section in extract_sections:
+            # Pattern captures everything after the name of the section up until either the next section title or EOF
+            pattern = rf'{section.lower()}[\s:\n](.*?)(\n[A-Z][^:\n]*:|\Z)'
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            if match:
+                parsed_text[section] = match.group(1).strip()
+
+        combined = ' '.join(filter(None, parsed_text.values()))
+        
+        return combined if combined else None
+
+
+    def extract_target(self, dataframe: pd.DataFrame) -> pd.DataFrame:
+        """
+        Takes a training dataframe and pulls out section intended to represent a target summarization.
+        This dataframe is not to be used for creating synthetic targets.
+
+        Parameters:
+        dataframe: Dataframe with only text -> to have representative summary extracted
+        """
+
+        if self.extract_sections is None:
+            logger.info("Using default section(s) to extract target data.")
+            self.extract_sections = ["brief hospital course", "hospital course"]
+        
+        df = dataframe.copy()
+        df["target"] = df[self.text_col].apply(lambda x: self._extract_from_text(x, self.extract_sections))
+        df = df.dropna(subset=["target"]) # Removes samples w/o any applicable sections
+        df["source_type"] = "real" # Targets are "real" in that they come from the data
+
+        return df
     
 
 
