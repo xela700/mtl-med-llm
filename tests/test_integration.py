@@ -11,7 +11,10 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def test_classification_input():
+def test_classification_input() -> None:
+    """
+    Test function to test integration of data fetching with preprocessing pipeline. Checks are made from print outputs.
+    """
 
     query_text = """
     SELECT h.subject_id, h.hadm_id, n.text AS discharge_note, ARRAY_AGG(h.icd_code) AS icd_codes

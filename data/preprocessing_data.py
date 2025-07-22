@@ -5,6 +5,10 @@ and clinical note summarization.
 
 import re
 import logging
+import pandas as pd
+import os
+from pathlib import Path
+from datasets import Dataset
 from abc import ABC, abstractmethod
 from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
@@ -22,14 +26,16 @@ class TextPreprocessor(ABC):
     remove_sections (list[str]): Optional section headers used to remove sections of clinical
     notes. Default of 'None' results in removal of sections that will always be blank due to 
     de-identification
+    cleaned_path (str): path string for saving cleaned dataset
     """
 
-    __slots__ = ("tokenizer", "text_col", "remove_sections")
+    __slots__ = ("tokenizer", "text_col", "remove_sections", "cleaned_path")
 
-    def __init__(self, checkpoint: str, text_col: str, remove_sections: list[str] = None):
+    def __init__(self, checkpoint: str, text_col: str, remove_sections: list[str] = None, cleaned_path: str = None):
         self.tokenizer = self._create_tokenizer(checkpoint)
         self.text_col = text_col
         self.remove_sections = remove_sections
+        self.cleaned_path = cleaned_path
 
     
     def _create_tokenizer(self, checkpoint: str) -> PreTrainedTokenizerBase:
@@ -146,6 +152,17 @@ class TextPreprocessor(ABC):
         dictionary structure expected by dataset.map()
         """
         pass
+
+    @abstractmethod
+    def preprocess(self, dataframe: pd.DataFrame) -> None:
+        """
+        Full preprocess pipeline for specific task. Takes a dataframe, cleans it, applies tokenization and filtering where applicable,
+        and saves it to a new location for use during model training.
+
+        Parameters:
+        dataframe: data to undergo preprocessing.
+        """
+        pass
     
 
 
@@ -248,6 +265,29 @@ class ClassificationPreprocessor(TextPreprocessor):
         """
         icd_codes = sample.get("labels", []) # gets the labels associated with a clinical note, or an empty list if none present
         return any(code in self.label_ids for code in icd_codes)
+
+    def preprocess(self, dataframe):
+        """
+        Full preprocess steps for classification. Renames columns to appropriate names.
+        Converts dataframe to a dataset. Filters samples without any applicable training labels.
+        Maps preprocess function. Finally, saves dataset to disk for reuse.
+        """
+        if self.text_col != "input":
+            dataframe.rename(columns={self.text_col: "input"}, inplace=True)
+        if self.label_col != "labels":
+            dataframe.rename(columns={self.label_col: "labels"}, inplace=True)
+
+        dataset = Dataset.from_pandas(dataframe)
+
+        dataset.filter(self.filter_text_by_label, batched=True)
+        dataset.map(self.preprocess_function, batched=True)
+
+        if os.path.exists(self.cleaned_path):
+            logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
+        
+        clean_path = Path(self.cleaned_path)
+
+        dataset.save_to_disk(str(clean_path))
     
         
 

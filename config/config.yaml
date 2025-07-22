@@ -9,10 +9,10 @@ data:
       WHERE h.icd_version = 10
       GROUP BY h.subject_id, h.hadm_id, n.text
     data_path: data/raw_data/classification_data.parquet
-    clean_path: data/cleaned_data/classification_data.parquet
+    clean_path: data/cleaned_data/classification_dataset
   
   task_2:
-    description: "Fetch top 5,000 ICD codes for classification"
+    description: "Fetch top 5,000 ICD codes for classification. This query does not require preprocessing, as it is used to filter query from task_1 only"
     query: >
       SELECT icd_code, COUNT(*) AS count
       FROM `physionet-data.mimiciv_3_1_hosp.diagnoses_icd`
@@ -29,10 +29,12 @@ data:
       FROM `physionet-data.mimiciv_note.discharge`
       WHERE MOD(ABS(FARM_FINGERPRINT(CAST(note_id AS STRING))), 100) < 33
     data_path: data/raw_data/summarization_data.parquet
-    clean_path: data/cleaned_data/summarization_data.parquet
-    full_path: data/cleaned_data/summarization_data_with_targets.parquet
+    clean_path: data/cleaned_data/summarization_dataset
+    full_path: data/cleaned_data/summarization_dataset_with_targets
 
 model:
+  classification_checkpoint: ""
+  summarization_checkpoint: ""
   dir: model/saved_model
   files:
     - config.json
