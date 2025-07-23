@@ -48,6 +48,7 @@ def test_classification_input() -> None:
     """
 
     save_path_labels = "tests/test_data/classification_label_data.parquet"
+    clean_path = "tests/test_data/classification_clean_data"
 
     if not os.path.exists(save_path_labels):
         fetch_data.fetch_and_save_query(query=query_labels, save_path=save_path_labels)  # label data
@@ -61,19 +62,36 @@ def test_classification_input() -> None:
     label_ids = label_data.set_index('labels')['count'].to_dict()
     logger.info("Converting label_data dataset to labels dictionary")
 
-    preprocessor = ClassificationPreprocessor("bert-base-cased", label_ids=label_ids, text_col='input', label_col='labels')
+    preprocessor = ClassificationPreprocessor("bert-base-cased", label_ids=label_ids, text_col='input', label_col='labels', cleaned_path=clean_path)
     logger.info("Instantiated classification preprocessor")
 
-    logger.info("Testing Remove Blank Sections")
-    raw_data['input'] = raw_data['input'].map(preprocessor.remove_blank_sections)
+    sample = raw_data['input'].iloc[1]
+    print("Before")
+    print(sample)
 
-    logger.info("Testing Normalize Deidentified Sections")
-    raw_data['input'] = raw_data['input'].map(preprocessor.normalize_deidentified_blanks)
+    print("\n\nAfter Remove Blank:")
+    sample = preprocessor.remove_blank_sections(sample)
+    print(sample)
 
-    logger.info("Testing Classification Section Extraction")
-    raw_data['input'] = raw_data['input'].map(preprocessor.classification_extract_sections)
+    print("\n\nAfter Normalizing Deidentified Sections:")
+    sample = preprocessor.normalize_deidentified_blanks(sample)
+    print(sample)
 
-    print(raw_data['input'].head())
+    print("\n\nAfter section extraction:")
+    sample = preprocessor.classification_extract_sections(sample)
+    print(sample)
+
+    # logger.info("Testing Remove Blank Sections")
+    # raw_data['input'] = raw_data['input'].map(preprocessor.remove_blank_sections)
+
+    # logger.info("Testing Normalize Deidentified Sections")
+    # raw_data['input'] = raw_data['input'].map(preprocessor.normalize_deidentified_blanks)
+    # raw_data.to_csv("tests/test_data/normalize_sections.csv")
+
+    # logger.info("Testing Classification Section Extraction")
+    # raw_data['input'] = raw_data['input'].map(preprocessor.classification_extract_sections)
+
+    # raw_data.to_csv("tests/test_data/full_process.csv")
 
 if __name__ == "__main__":
     test_classification_input()

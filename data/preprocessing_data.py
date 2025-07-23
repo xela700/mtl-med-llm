@@ -88,27 +88,24 @@ class TextPreprocessor(ABC):
         while i < len(lines):
             line = lines[i].strip()
 
-            if line == "":
-                i +=1
+            if line == "" or re.fullmatch(r"=+\s*", line):
+                i += 1
                 continue
 
-            if any(header.lower() in line.lower() for header in self.remove_sections):
-                # Captures and removes sections followed by underscore blanks
-                if re.fullmatch(r".*:\s*_+\s*", line):
-                    i += 1
-                    continue
-                # Captures and removes sections with underscore blanks on the following line
-                elif i + 1 < len(lines) and re.fullmatch(r"^_+\s*", lines[i + 1].strip()):
-                    i += 2
-                    continue
-                # Catch all for a header that should be removed
-                else:
-                    i += 1
-                    continue
-            
-            else:
-                cleaned.append(lines[i])
-                i += 1
+            # Detection of removable headers
+            has_header = any(header.lower() in line.lower() for header in self.remove_sections)
+
+            # Checks for redactions on same/next line
+            is_redacted_line = re.search(r"_+", line)
+            is_redacted_next = i + 1 < len(lines) and re.fullmatch(r"_+\s*", lines[i + 1].strip())
+
+            # Removes redactable sections
+            if has_header and (is_redacted_line or is_redacted_next):
+                i += 2 if is_redacted_next else 1
+                continue
+            # Section kept otherwise
+            cleaned.append(line)
+            i += 1
         
         return "\n".join(cleaned)
     
@@ -204,18 +201,27 @@ class ClassificationPreprocessor(TextPreprocessor):
         if self.extract_sections is None:
             logger.info("Using default sections to extract data for classification.")
             self.extract_sections = ['discharge diagnosis', 'brief hospital course', 'hospital course',
-                        'final diagnosis', 'principal diagnosis', 'history of present illness']
+                        'final diagnosis', 'principal diagnosis', 'primary diagnosis', 'history of present illness']
         
-        parsed_text = {}
+        # Normalize section names for comparison
+        target_sections = [s.lower().strip() for s in self.extract_sections]
 
-        for section in self.extract_sections:
-            # Pattern captures everything after the name of the section up until either the next section title or EOF
-            pattern = rf'{section.lower()}[\s:\n](.*?)(\n[A-Z][^:\n]*:|\Z)'
-            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-            if match:
-                parsed_text[section] = match.group(1).strip()
-        
-        return ' '.join(filter(None, parsed_text.values()))
+        # Find all sections with their content
+        section_pattern = re.compile(
+            r'(?i)(?P<header>^[A-Z][A-Z \-/]{3,}):\s*\n(?P<body>.*?)(?=^[A-Z][A-Z \-/]{3,}:|\Z)',
+            re.DOTALL | re.MULTILINE
+        )
+
+        extracted = []
+
+        for match in section_pattern.finditer(text):
+            header = match.group('header').strip().lower()
+            body = match.group('body').strip()
+
+            if header in target_sections:
+                extracted.append(body)
+
+        return ' '.join(extracted)
     
 
     def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
@@ -354,7 +360,7 @@ class SummarizationTargetPreprocessor(TextPreprocessor):
         self.data_collator = DataCollatorForSeq2Seq(tokenizer=checkpoint, model=checkpoint, padding=True)
 
     
-    def _extract_from_text(self, text: str, extract_sections: list[str]) -> str | None:
+    def extract_from_text(self, text: str, extract_sections: list[str]) -> str | None:
         """
         Helper function for extract_target. Extracts sections from text and returns them if they exist in a combined 
         format. (Only one should exist)
@@ -368,17 +374,39 @@ class SummarizationTargetPreprocessor(TextPreprocessor):
         None: returns nothing if section doesn't exist
         """
 
-        parsed_text = {}
-        for section in extract_sections:
-            # Pattern captures everything after the name of the section up until either the next section title or EOF
-            pattern = rf'{section.lower()}[\s:\n](.*?)(\n[A-Z][^:\n]*:|\Z)'
-            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-            if match:
-                parsed_text[section] = match.group(1).strip()
 
-        combined = ' '.join(filter(None, parsed_text.values()))
+        # Normalize section names for comparison
+        target_sections = [s.lower().strip() for s in self.extract_sections]
+
+        # Find all sections with their content
+        section_pattern = re.compile(
+            r'(?i)(?P<header>^[A-Z][A-Z \-/]{3,}):\s*\n(?P<body>.*?)(?=^[A-Z][A-Z \-/]{3,}:|\Z)',
+            re.DOTALL | re.MULTILINE
+        )
+
+        extracted = []
+
+        for match in section_pattern.finditer(text):
+            header = match.group('header').strip().lower()
+            body = match.group('body').strip()
+
+            if header in target_sections:
+                extracted.append(body)
         
+        combined = ' '.join(extracted)
+
         return combined if combined else None
+        # parsed_text = {}
+        # for section in extract_sections:
+        #     # Pattern captures everything after the name of the section up until either the next section title or EOF
+        #     pattern = rf'{section.lower()}[\s:\n](.*?)(\n[A-Z][^:\n]*:|\Z)'
+        #     match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+        #     if match:
+        #         parsed_text[section] = match.group(1).strip()
+
+        # combined = ' '.join(filter(None, parsed_text.values()))
+        
+        # return combined if combined else None
 
 
     def extract_target(self, dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -395,7 +423,7 @@ class SummarizationTargetPreprocessor(TextPreprocessor):
             self.extract_sections = ["brief hospital course", "hospital course"]
         
         df = dataframe.copy()
-        df["target"] = df[self.text_col].apply(lambda x: self._extract_from_text(x, self.extract_sections))
+        df["target"] = df[self.text_col].apply(lambda x: self.extract_from_text(x, self.extract_sections))
         df = df.dropna(subset=["target"]) # Removes samples w/o any applicable sections
         df["source_type"] = "real" # Targets are "real" in that they come from the data
 
