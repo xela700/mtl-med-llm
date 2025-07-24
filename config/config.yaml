@@ -28,9 +28,11 @@ data:
       SELECT text AS discharge_note
       FROM `physionet-data.mimiciv_note.discharge`
       WHERE MOD(ABS(FARM_FINGERPRINT(CAST(note_id AS STRING))), 100) < 33
+    model: google/bigbird-pegasus-large-pubmed
     data_path: data/raw_data/summarization_data.parquet
+    real_summary_path: data/cleaned_data/real_summarization_dataset
+    synthetic_summary_path: data/cleaned_data/synthetic_summarization_dataset
     clean_path: data/cleaned_data/summarization_dataset
-    full_path: data/cleaned_data/summarization_dataset_with_targets
 
 model:
   classification_checkpoint: ""

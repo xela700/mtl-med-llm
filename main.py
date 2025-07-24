@@ -19,7 +19,7 @@ def main(args: list[str]) -> None:
             fetch_and_save_query(query=config["data"]["task_2"]["query"], save_path=config["data"]["task_2"]["data_path"])
         elif args.target == "summarization":
             fetch_and_save_query(query=config["data"]["task_3"]["query"], save_path=config["data"]["task_3"]["data_path"])
-        elif args.target == "full":
+        elif args.target == "all":
             fetch_and_save_query(query=config["data"]["task_1"]["query"], save_path=config["data"]["task_1"]["data_path"])
             fetch_and_save_query(query=config["data"]["task_2"]["query"], save_path=config["data"]["task_2"]["data_path"])
             fetch_and_save_query(query=config["data"]["task_3"]["query"], save_path=config["data"]["task_3"]["data_path"])
@@ -32,7 +32,16 @@ def main(args: list[str]) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command")
+
     data_parser = subparsers.add_parser("fetch")
-    data_parser.add_argument("target", choices=["classification", "summarization", "full"], help="Specify which dataset(s) to pull from BigQuery")
+    data_parser.add_argument("target", choices=["classification", "summarization", "all"], help="Specify which dataset(s) to pull from BigQuery")
+
     preprocess_parser = subparsers.add_parser("preprocess")
-    preprocess_parser.add_argument("target", choices=["classification", "summarization", "full"], help="Specify which preprocess pipeline(s) to initiate")
+    preprocess_parser.add_argument("target", choices=["classification", "summary_generation", "summarization", "all"], help="Specify which preprocess pipeline(s) to initiate")
+
+    args = parser.parse_args()
+
+    if args.command is None:
+        print("No command provided, Skipping execution.")
+    else:
+        main(args)
