@@ -136,21 +136,6 @@ class TextPreprocessor(ABC):
         
         text = re.sub(r"\b_{2,}\b", "<REDACTED>", text) # Clean up for remaining unknown de-identified fields
         return text
-    
-    
-    @abstractmethod
-    def preprocess_function(self, batch: dict) -> dict[str, list[int]]:
-        """
-        Preprocessing method that may vary depending on NLP task. To be determined by child classes.
-        Intended for use with dataset.map()
-
-        Parameters:
-        batch (dict): batch on which the preprocess function will be applied
-
-        Returns:
-        dictionary structure expected by dataset.map()
-        """
-        pass
 
     @abstractmethod
     def preprocess(self, dataframe: pd.DataFrame) -> None:
@@ -317,7 +302,7 @@ class SummarizationPreprocessor(TextPreprocessor):
     data_collator -> preparing data for encoder-decoder model training
     """
 
-    __slots__ = ("target_col", "source_type_col", "data_collator")
+    __slots__ = ("target_col", "source_type_col", "data_collator", "real_data_path", "synthetic_data_path")
 
     def __init__(self, checkpoint: str, text_col: str, target_col: str, source_type_col: str, cleaned_path: str, remove_sections: list[str] = None):
         super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
@@ -355,24 +340,41 @@ class SummarizationPreprocessor(TextPreprocessor):
 
         tokenized_data["labels"] = labels
         return tokenized_data
+    
+    def preprocess(self, dataframe: pd.DataFrame) -> None:
+        
+        dataset = Dataset.from_pandas(dataframe)
+
+        dataset.map(self.preprocess_function, batched=True)
+
+        if os.path.exists(self.cleaned_path):
+            logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
+
+        clean_path = Path(self.cleaned_path)
+
+        dataset.save_to_disk(str(clean_path))
 
 
-class SummarizationTargetPreprocessor(TextPreprocessor):
+class SummarizationTargetCreation(TextPreprocessor):
     """
     Preprocessor for raw data intended for summarization. Used to clean data and prepare for input into LLM to create synthetic targets.
 
     Attributes:
+    checkpoint -> model base being used to generate synthetic summaries
+    text_col -> column with text
     extract_sections -> section from text to be extracted for use as real training targets
     model -> model for generating synthetic summaries (uses same checkpoint)
     device -> GPU or CPU for summary generation. Will use GPU if available.
     summarizer -> pipeline for generating summaries
     """
 
-    __slots__ = ("extract_sections", "model", "device", "summarizer")
+    __slots__ = ("extract_sections", "model", "device", "summarizer", "real_target_path", "synthetic_target_path")
 
-    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
+    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, real_target_path: str, synthetic_target_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
         super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
         self.extract_sections = extract_sections
+        self.real_target_path = real_target_path
+        self.synthetic_target_path = synthetic_target_path
         self.model = AutoModelForSeq2SeqLM(checkpoint)
         self.device = 0 if torch.cuda.is_available() else -1
         self.summarizer = pipeline("summarization", model=self.model, tokenizer=self.tokenizer, device=self.device)
@@ -446,9 +448,12 @@ class SummarizationTargetPreprocessor(TextPreprocessor):
         df = df.dropna(subset=["target"]) # Removes samples w/o any applicable sections
         df["source_type"] = "real" # Targets are "real" in that they come from the data
 
+        if os.path.exists(save_path):
+            logger.info(f"Data already exists at {save_path}. Overwritting.")
+
         df.to_parquet(save_path)
     
-    def generate_synthetic_targets(self, dataframe: pd.DataFrame, save_path: str, chunk_size: int = 100, resume: bool = True) -> None:
+    def generate_synthetic_targets(self, dataframe: pd.DataFrame, save_path: str = None, chunk_size: int = 100, resume: bool = True) -> None:
         """
         Takes training input and generates synthetic summaries using a pretrained medical LLM (checkpoint).
         Generates in chunks to limit chance of interruptions.
@@ -459,6 +464,12 @@ class SummarizationTargetPreprocessor(TextPreprocessor):
         save_path (str): Path where the summaries will be saved
         resume (bool): If True, will skip rows with generated summaries
         """
+
+        if save_path is None:
+            save_path = self.cleaned_path
+
+        if not resume and os.path.exists(save_path):
+            logger.info(f"Data exists at {save_path} for new generation. Overwritting data.")
 
         if resume and os.path.exists(save_path):
             df_summaries = pd.read_parquet(save_path)
@@ -491,6 +502,41 @@ class SummarizationTargetPreprocessor(TextPreprocessor):
                 index=True, 
                 append=os.path.exists(save_path)
                 )
+
+    def preprocess(self, dataframe: pd.DataFrame) -> None:
+        """
+        Cleans text by removing sections that are always blank and inserting representative placeholders in remaining blanks.
+        Breaks data up to generate real and sythetic summaries.
+        This preprocess method saves two separate parquet files, one for extracted "real" targets and one for synthetically-created targets
+
+        Parameters:
+        dataframe: to clean and prepare for summary generation
+        """
+        dataframe[self.text_col] = dataframe[self.text_col].apply(lambda x: self.remove_blank_sections(x))
+        dataframe[self.text_col] = dataframe[self.text_col].apply(lambda x: self.normalize_deidentified_blanks(x))
+
+        data_for_real_targets = dataframe.sample(frac=0.5, random_state=42)
+        data_for_synthetic_targets = dataframe.drop(data_for_real_targets.index)
+
+        data_for_real_targets.to_parquet(self.real_target_path)
+        data_for_synthetic_targets.to_parquet(self.synthetic_target_path)
+    
+    def combine_data(self, real_summary_dataset: pd.DataFrame, synthetic_summary_dataset: pd.DataFrame) -> None:
+        """
+        Requires real and synthetic targets created and saved in applicable locations. Unites both datasets to finalize summary preprocessing in preparation for
+        model training.
+
+        Parameters:
+        real_summary_dataset: Dataframe with real summary targets
+        synthetic_summary_dataset: Dataframe with synthetic summary targets
+        """
+
+        combined_summary_dataset = pd.concat([real_summary_dataset, synthetic_summary_dataset], ignore_index=True)
+        combined_summary_dataset.to_parquet(self.cleaned_path)
+
+        
+    
+    
 
     
 

@@ -9,7 +9,7 @@ data:
       WHERE h.icd_version = 10
       GROUP BY h.subject_id, h.hadm_id, n.text
     data_path: data/raw_data/classification_data.parquet
-    clean_path: data/cleaned_data/classification_dataset
+    tokenized_path: data/cleaned_data/classification_dataset
   
   task_2:
     description: "Fetch top 5,000 ICD codes for classification. This query does not require preprocessing, as it is used to filter query from task_1 only"
@@ -30,13 +30,16 @@ data:
       WHERE MOD(ABS(FARM_FINGERPRINT(CAST(note_id AS STRING))), 100) < 33
     model: google/bigbird-pegasus-large-pubmed
     data_path: data/raw_data/summarization_data.parquet
-    real_summary_path: data/cleaned_data/real_summarization_dataset
-    synthetic_summary_path: data/cleaned_data/synthetic_summarization_dataset
+    real_data_path: data/cleaned_data/real_dataset
+    synthetic_data_path: data/cleaned_data/synthetic_dataset
+    real_summary_path: data/cleaned_data/real_summary_dataset
+    synthetic_summary_path: data/cleaned_data/synthetic_summary_dataset
     clean_path: data/cleaned_data/summarization_dataset
+    tokenized_path: data/cleaned_data/summarization_dataset_tokenized
 
 model:
-  classification_checkpoint: ""
-  summarization_checkpoint: ""
+  classification_checkpoint: dmis-lab/biobert-large-cased-v1.1
+  summarization_checkpoint: GanjinZero/biobart-v2-large
   dir: model/saved_model
   files:
     - config.json
