@@ -375,9 +375,9 @@ class SummarizationTargetCreation(TextPreprocessor):
         self.extract_sections = extract_sections
         self.real_target_path = real_target_path
         self.synthetic_target_path = synthetic_target_path
-        self.model = AutoModelForSeq2SeqLM(checkpoint)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint)
         self.device = 0 if torch.cuda.is_available() else -1
-        self.summarizer = pipeline("summarization", model=self.model, tokenizer=self.tokenizer, device=self.device)
+        self.summarizer = pipeline("summarization", model=self.model, tokenizer=self.tokenizer, device=self.device, batch_size=2)
 
     
     def extract_from_text(self, text: str, extract_section_list: list[str] = None) -> str | None:
@@ -452,6 +452,17 @@ class SummarizationTargetCreation(TextPreprocessor):
             logger.info(f"Data already exists at {save_path}. Overwritting.")
 
         df.to_parquet(save_path)
+
+    def is_valid_parquet_file(self, path: str) -> bool:
+        """
+        Helper function to determine if filepath is a valid parquet file
+        """
+        import fastparquet
+        try:
+            _ = fastparquet.ParquetFile(path)
+            return True
+        except Exception:
+            return False
     
     def generate_synthetic_targets(self, dataframe: pd.DataFrame, save_path: str = None, chunk_size: int = 100, resume: bool = True) -> None:
         """
@@ -491,16 +502,30 @@ class SummarizationTargetCreation(TextPreprocessor):
                 if chunk.empty:
                     continue
             
-            chunk["target"] = chunk[self.text_col].apply(
-                lambda x: self.summarizer(x, max_length=256, min_length=30, do_sample=False)[0]["summary_text"]
-                )
+            texts = chunk[self.text_col].tolist()
+
+            logger.info(f"Starting summarization for rows {start} to {end} (n={len(texts)})")
+
+            try:
+                summaries = self.summarizer(texts, max_length=256, min_length=30, do_sample=False)
+                logger.info(f"Completed summarization for rows {start} to {end}")
+            except Exception as e:
+                logger.error(f"Summarization failed for rows {start} to {end}: {e}")
+                raise e
+            chunk["target"] = [summary["summary_text"] for summary in summaries]
+            
+            # chunk["target"] = chunk[self.text_col].apply(
+            #     lambda x: self.summarizer(x, max_length=256, min_length=30, do_sample=False)[0]["summary_text"]
+            #     )
             chunk["source_type"] = "synthetic" # Targets are synthetic in that they are generated
             
+            file_exists_and_valid = Path(save_path).exists() and self.is_valid_parquet_file(save_path)
+
             chunk.to_parquet(
                 save_path, 
-                engine='pyarrow', 
+                engine='fastparquet', 
                 index=True, 
-                append=os.path.exists(save_path)
+                append=file_exists_and_valid
                 )
 
     def preprocess(self, dataframe: pd.DataFrame) -> None:

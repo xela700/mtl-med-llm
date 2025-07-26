@@ -5,8 +5,10 @@ Current steps:
 Fetch Data (Both for classification and summarization)
 Preprocess Data
 """
-
+import transformers
+transformers.logging.set_verbosity_error()
 import argparse
+from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
 from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation
@@ -106,6 +108,7 @@ def main(args: list[str]) -> None:
 
 
 if __name__ == "__main__":
+    logging_setup()
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command")
 
