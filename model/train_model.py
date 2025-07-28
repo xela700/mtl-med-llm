@@ -1,17 +1,81 @@
-from google.cloud import bigquery
-import pandas as pd
-
-project_id = 'fine-tuned-med-llm'
-
-client = bigquery.Client(project=project_id)
-
-query = """
-SELECT *
-FROM `physionet-data.mimiciv_3_1_hosp.admissions`
-LIMIT 1
+"""
+Module to set up training tasks for all NLP models.
 """
 
-query_job = client.query(query)
-df = query_job.to_dataframe()
-print(df)
+from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding
+from transformers.training_args import TrainingArguments
+from transformers.trainer import Trainer
+from peft import get_peft_model, LoraConfig, TaskType
+from datasets import load_dataset
+from data.fetch_data import load_data
+
+def classification_model_training(data_dir: str, label_dir: str, checkpoint: str, save_dir: str, test_data_dir: str) -> None:
+    """
+    Training method for fine-tuning a pre-trained encoder model on ICD-10 code
+    classification task.
+
+    Parameters:
+    data_dir (str): path to dataset being used for training
+    label_dir (str): path to labels
+    checkpoint (str): pre-trained HuggingFace model used for training
+    save_dir (str): path to saved PEFT weights for specified task
+    test_data_dir (str): path to save test data to
+    """
+
+    dataset = load_dataset(data_dir)
+    train_val_test = dataset["train"].train_test_split(test_size=0.2)
+    train_val = train_val_test["train"].train_test_split(test_size=0.1)
+
+    train_dataset = train_val["train"]
+    val_dataset = train_val["test"]
+    test_dataset = train_val_test["test"] # For use when evaluating model performance after training
+
+    test_dataset.save_to_disk(test_data_dir)
+
+    num_labels = len(load_data(label_dir))
+
+    config = AutoConfig.from_pretrained(checkpoint)
+    config.num_labels = num_labels
+    config.problem_type = "multi_label_classification"
+
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    model = AutoModelForSequenceClassification.from_pretrained(checkpoint, config=config)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    lora_config = LoraConfig(
+        r=8,
+        lora_alpha=16,
+        target_modules=["query", "value"],
+        lora_dropout=0.1,
+        bias="none",
+        task_type=TaskType.SEQ_CLS
+    )
+
+    model = get_peft_model(model=model, peft_config=lora_config)
+
+    training_args = TrainingArguments(
+        output_dir=save_dir,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        num_train_epochs=3,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        logging_dir="./logs",
+        load_best_model_at_end=True,
+        metric_for_best_model="f1",
+        greater_is_better=True
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        tokenizer=tokenizer,
+        data_collator=data_collator
+    )
+
+    trainer.train()
+
+
 

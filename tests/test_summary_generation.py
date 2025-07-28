@@ -39,8 +39,22 @@ def print_generation() -> None:
     val = summary_data.at[0, "target"]
     print(val)
 
+def test_summary_content() -> None:
+    """
+    Prints components of completed summary dataset (prior to tokenization) for examination.
+    """
+
+    summary_data = load_data("data/cleaned_data/summarization_dataset.parquet")
+
+    print(len(summary_data))
+    print(summary_data.head())
+    print(summary_data.iat[1, 0])
+    print("\n", summary_data.iat[1, 1])
+    print("\n", summary_data.iat[1, 2])
+
 
 if __name__ == "__main__":
     logging_setup()
     # test_generation()
-    print_generation()
+    # print_generation()
+    test_summary_content()

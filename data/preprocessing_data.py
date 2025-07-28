@@ -171,7 +171,6 @@ class ClassificationPreprocessor(TextPreprocessor):
         self.extract_sections = extract_sections
         self.label_ids = label_ids
         self.label_col = label_col
-        self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
 
     def classification_extract_sections(self, text: str) -> str:
         """
@@ -234,6 +233,8 @@ class ClassificationPreprocessor(TextPreprocessor):
 
         tokenized_data = self.tokenizer(processed_texts, truncation=True, return_tensors=None)
 
+        self.label_ids = {code: idx for idx, code in enumerate(self.label_ids.keys())}
+
         multi_hot_labels = []
         for labels in batch[self.label_col]:
             label_vector = [0] * len(self.label_ids)
@@ -246,19 +247,23 @@ class ClassificationPreprocessor(TextPreprocessor):
         return tokenized_data
     
 
-    def filter_text_by_label(self, sample: dict[str, list[str]]) -> bool:
+    def filter_text_by_label(self, batch: dict[str, list[str]]) -> list[bool]:
         """
         Filtering method to check for the presence of one (or more) ICD labels that are being used during
         training. To be used with dataset.filter() method
 
         Parameters:
-        sample: dataset sample being provided to check for label presence
+        batch: dataset batch being provided to check for label presence
 
         Return:
-        bool: true if at least one label is present
+        list[bool]: true if at least one label is present. filtered represents booleans that determine whether
+        a note stays or gets dropped. 
         """
-        icd_codes = sample.get("labels", []) # gets the labels associated with a clinical note, or an empty list if none present
-        return any(code in self.label_ids for code in icd_codes)
+        filtered = []
+        for icd_codes in batch.get("labels", []):
+            keep = any(code in self.label_ids for code in icd_codes)
+            filtered.append(keep)
+        return filtered
 
     def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
@@ -271,8 +276,10 @@ class ClassificationPreprocessor(TextPreprocessor):
         """
         if self.text_col != "input":
             dataframe.rename(columns={self.text_col: "input"}, inplace=True)
+            self.text_col = "input"
         if self.label_col != "labels":
             dataframe.rename(columns={self.label_col: "labels"}, inplace=True)
+            self.label_col = "labels"
 
         dataset = Dataset.from_pandas(dataframe)
 
@@ -312,7 +319,6 @@ class SummarizationPreprocessor(TextPreprocessor):
         super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.target_col = target_col
         self.source_type_col = source_type_col
-        self.data_collator = DataCollatorForSeq2Seq(tokenizer=checkpoint, model=checkpoint, padding=True)
 
     
     def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[str]]:
