@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pathlib import Path
 from datasets import Dataset
 from abc import ABC, abstractmethod
-from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq, pipeline, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, pipeline, AutoModelForSeq2SeqLM
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 

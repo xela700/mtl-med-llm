@@ -44,4 +44,6 @@ model:
   classification_checkpoint: dmis-lab/biobert-large-cased-v1.1
   summarization_checkpoint: GanjinZero/biobart-v2-large
   classification_model: model/saved_model/ft-biobert-large
+  classification_training_checkpoints: model/saved_model/ft-biobert-large-checkpoints
+  summarization_training_checkpoints: model/saved_model/ft-biobart-large-checkpoints
   summarization_model: model/saved_model/ft-biobart-large

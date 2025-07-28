@@ -2,14 +2,14 @@
 Module to set up training tasks for all NLP models.
 """
 
-from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding
+from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_dataset
 from data.fetch_data import load_data
 
-def classification_model_training(data_dir: str, label_dir: str, checkpoint: str, save_dir: str, test_data_dir: str) -> None:
+def classification_model_training(data_dir: str, label_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
     """
     Training method for fine-tuning a pre-trained encoder model on ICD-10 code
     classification task.
@@ -42,7 +42,7 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
     model = AutoModelForSequenceClassification.from_pretrained(checkpoint, config=config)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    lora_config = LoraConfig(
+    lora_config = LoraConfig( # PERF tuning
         r=8,
         lora_alpha=16,
         target_modules=["query", "value"],
@@ -54,7 +54,7 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
     model = get_peft_model(model=model, peft_config=lora_config)
 
     training_args = TrainingArguments(
-        output_dir=save_dir,
+        output_dir=training_checkpoint_dir,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
         num_train_epochs=3,
@@ -76,6 +76,72 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
     )
 
     trainer.train()
+
+    model.save_pretrained(save_dir)
+    tokenizer.save_pretrained(save_dir)
+
+def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
+    """
+    Training method for fine-tuning a pre-trained encoder-decoder model on clinical note summarization task.
+
+    Parameters:
+    data_dir (str): path to dataset being used for training
+    checkpoint (str): pre-trained HuggingFace model used for training
+    save_dir (str): path to saved PEFT weights for specified task
+    test_data_dir (str): path to save test data to
+    """
+
+    dataset = load_dataset(data_dir)
+    train_val_test = dataset["train"].train_test_split(test_size=0.2)
+    train_val = train_val_test["train"].train_test_split(test_size=0.1)
+
+    train_dataset = train_val["train"]
+    val_dataset = train_val["test"]
+    test_dataset = train_val_test["test"] # For use when evaluating model performance after training
+
+    test_dataset.save_to_disk(test_data_dir)
+
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint)
+    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True)
+
+    lora_config = LoraConfig( # PERF tuning
+        r=8,
+        lora_alpha=16,
+        target_modules=["q_proj", "v_proj"],
+        lora_dropout=0.1,
+        bias="none",
+        task_type=TaskType.SEQ_2_SEQ_LM
+    )
+
+    model = get_peft_model(model, lora_config)
+
+    training_args = TrainingArguments(
+        output_dir=training_checkpoint_dir,
+        per_device_train_batch_size=4,
+        per_device_eval_batch_size=3,
+        num_train_epochs=3,
+        logging_dir="./logs",
+        save_strategy="epoch",
+        save_total_limit=2,
+        load_best_model_at_end=True,
+        metric_for_best_model="rougeL",
+        greater_is_better=True
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        data_collator=data_collator
+    )
+
+    trainer.train()
+
+    model.save_pretrained(save_dir)
+    tokenizer.save_pretrained(save_dir)
+
 
 
 
