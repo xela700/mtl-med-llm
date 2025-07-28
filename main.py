@@ -36,6 +36,8 @@ def main(args: list[str]) -> None:
 
             preprocessor = ClassificationPreprocessor(checkpoint=checkpoint, label_ids=label_ids, text_col="discharge_note", label_col="icd_codes", cleaned_path=config["data"]["task_1"]["tokenized_path"])
 
+            model_save_dir = config["model"]["classification_model"]
+
             preprocessor.preprocess(base_data)
         
         elif args.target == "summary_generation": # Must be done before command "generation"
@@ -54,7 +56,9 @@ def main(args: list[str]) -> None:
             checkpoint = config["model"]["summarization_checkpoint"]
             preprocessor = SummarizationPreprocessor(checkpoint=checkpoint, text_col="discharge_note", target_col="target", source_type_col="source_type", cleaned_path=tokenized_path)
 
-            preprocessor.preprocess(base_data)
+            model_save_dir = config["model"]["summarization_model"]
+
+            preprocessor.preprocess(base_data, save_dir=model_save_dir)
     
     elif args.command == "summary_generation":
         if args.target == "real":
@@ -116,7 +120,7 @@ if __name__ == "__main__":
     data_parser.add_argument("target", choices=["classification", "summarization", "all"], help="Specify which dataset(s) to pull from BigQuery")
 
     generation_parser = subparsers.add_parser("summary_generation")
-    generation_parser.add_argument("target", choices=["real", "synthetic", "syntethic_continue", "combine"], help="Specify target creation for summary task. Combine unites both types of targets into one dataset.")
+    generation_parser.add_argument("target", choices=["real", "synthetic", "synthetic_continue", "combine"], help="Specify target creation for summary task. Combine unites both types of targets into one dataset.")
 
     preprocess_parser = subparsers.add_parser("preprocess")
     preprocess_parser.add_argument("target", choices=["classification", "summary_generation", "summarization"], help="Specify which preprocess pipeline(s) to initiate")

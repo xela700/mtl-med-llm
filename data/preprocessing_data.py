@@ -138,13 +138,14 @@ class TextPreprocessor(ABC):
         return text
 
     @abstractmethod
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
         Full preprocess pipeline for specific task. Takes a dataframe, cleans it, applies tokenization and filtering where applicable,
         and saves it to a new location for use during model training.
 
         Parameters:
         dataframe: data to undergo preprocessing.
+        save_dir (str): save directory for tokenizer config for parity with model.
         """
         pass
     
@@ -166,7 +167,7 @@ class ClassificationPreprocessor(TextPreprocessor):
     __slots__ = ("label_ids", "extract_sections", "label_col", "data_collator")
 
     def __init__(self, checkpoint: str, label_ids: dict[str:int], text_col: str, label_col: str, cleaned_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
-        super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
+        super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.extract_sections = extract_sections
         self.label_ids = label_ids
         self.label_col = label_col
@@ -259,7 +260,7 @@ class ClassificationPreprocessor(TextPreprocessor):
         icd_codes = sample.get("labels", []) # gets the labels associated with a clinical note, or an empty list if none present
         return any(code in self.label_ids for code in icd_codes)
 
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
         Full preprocess steps for classification. Renames columns to appropriate names.
         Converts dataframe to a dataset. Filters samples without any applicable training labels.
@@ -284,6 +285,9 @@ class ClassificationPreprocessor(TextPreprocessor):
         clean_path = Path(self.cleaned_path)
 
         dataset.save_to_disk(str(clean_path))
+
+        if save_dir:
+            self.tokenizer.save_pretrained(save_directory=save_dir)
     
         
 
@@ -305,7 +309,7 @@ class SummarizationPreprocessor(TextPreprocessor):
     __slots__ = ("target_col", "source_type_col", "data_collator", "real_data_path", "synthetic_data_path")
 
     def __init__(self, checkpoint: str, text_col: str, target_col: str, source_type_col: str, cleaned_path: str, remove_sections: list[str] = None):
-        super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
+        super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.target_col = target_col
         self.source_type_col = source_type_col
         self.data_collator = DataCollatorForSeq2Seq(tokenizer=checkpoint, model=checkpoint, padding=True)
@@ -341,7 +345,7 @@ class SummarizationPreprocessor(TextPreprocessor):
         tokenized_data["labels"] = labels
         return tokenized_data
     
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         
         dataset = Dataset.from_pandas(dataframe)
 
@@ -353,6 +357,9 @@ class SummarizationPreprocessor(TextPreprocessor):
         clean_path = Path(self.cleaned_path)
 
         dataset.save_to_disk(str(clean_path))
+
+        if save_dir:
+            self.tokenizer.save_pretrained(save_directory=save_dir)
 
 
 class SummarizationTargetCreation(TextPreprocessor):
@@ -371,7 +378,7 @@ class SummarizationTargetCreation(TextPreprocessor):
     __slots__ = ("extract_sections", "model", "device", "summarizer", "real_target_path", "synthetic_target_path")
 
     def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, real_target_path: str, synthetic_target_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
-        super().__init__(checkpoint, text_col, remove_sections, cleaned_path)
+        super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.extract_sections = extract_sections
         self.real_target_path = real_target_path
         self.synthetic_target_path = synthetic_target_path
@@ -464,7 +471,29 @@ class SummarizationTargetCreation(TextPreprocessor):
         except Exception:
             return False
     
-    def generate_synthetic_targets(self, dataframe: pd.DataFrame, save_path: str = None, chunk_size: int = 100, resume: bool = True) -> None:
+    def summarize_batch(self, texts: list[str], max_length = 256, min_length = 30) -> list[str]:
+        inputs = self.tokenizer(
+            texts,
+            max_length=4096,
+            padding="longest",
+            truncation=True,
+            return_tensors="pt"
+            ).to(self.device)
+        
+        with torch.no_grad():
+            output_ids = self.model.generate(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_length=max_length,
+                min_length=min_length,
+                do_sample=False
+            )
+        
+        return self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+
+
+    
+    def generate_synthetic_targets(self, dataframe: pd.DataFrame, save_path: str = None, chunk_size: int = 4, resume: bool = True) -> None:
         """
         Takes training input and generates synthetic summaries using a pretrained medical LLM (checkpoint).
         Generates in chunks to limit chance of interruptions.
@@ -507,12 +536,12 @@ class SummarizationTargetCreation(TextPreprocessor):
             logger.info(f"Starting summarization for rows {start} to {end} (n={len(texts)})")
 
             try:
-                summaries = self.summarizer(texts, max_length=256, min_length=30, do_sample=False)
+                summaries = self.summarize_batch(texts)
                 logger.info(f"Completed summarization for rows {start} to {end}")
             except Exception as e:
                 logger.error(f"Summarization failed for rows {start} to {end}: {e}")
                 raise e
-            chunk["target"] = [summary["summary_text"] for summary in summaries]
+            chunk["target"] = summaries
             
             # chunk["target"] = chunk[self.text_col].apply(
             #     lambda x: self.summarizer(x, max_length=256, min_length=30, do_sample=False)[0]["summary_text"]
@@ -528,7 +557,7 @@ class SummarizationTargetCreation(TextPreprocessor):
                 append=file_exists_and_valid
                 )
 
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
         Cleans text by removing sections that are always blank and inserting representative placeholders in remaining blanks.
         Breaks data up to generate real and sythetic summaries.
@@ -545,18 +574,27 @@ class SummarizationTargetCreation(TextPreprocessor):
 
         data_for_real_targets.to_parquet(self.real_target_path)
         data_for_synthetic_targets.to_parquet(self.synthetic_target_path)
+
+        if save_dir: # Unlikely to need for only generating text
+            self.tokenizer.save_pretrained(save_directory=save_dir)
     
     def combine_data(self, real_summary_dataset: pd.DataFrame, synthetic_summary_dataset: pd.DataFrame) -> None:
         """
         Requires real and synthetic targets created and saved in applicable locations. Unites both datasets to finalize summary preprocessing in preparation for
-        model training.
+        model training. Goal is to use an equal number of real and synthetic targets for training.
 
         Parameters:
         real_summary_dataset: Dataframe with real summary targets
         synthetic_summary_dataset: Dataframe with synthetic summary targets
         """
 
-        combined_summary_dataset = pd.concat([real_summary_dataset, synthetic_summary_dataset], ignore_index=True)
+        min_length = min(len(real_summary_dataset), len(synthetic_summary_dataset))
+
+        real_summary_trimmed = real_summary_dataset.head(min_length)
+        synthetic_summary_trimmed = synthetic_summary_dataset.head(min_length)
+
+        combined_summary_dataset = pd.concat([real_summary_trimmed, synthetic_summary_trimmed], ignore_index=True)
+        logger.info(f"Saving combined data to {self.cleaned_path}")
         combined_summary_dataset.to_parquet(self.cleaned_path)
 
         
