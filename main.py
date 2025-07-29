@@ -3,7 +3,8 @@ Main script with command line parser arguments to control which steps occur with
 
 Current steps:
 Fetch Data (Both for classification and summarization)
-Preprocess Data
+Preprocess Data for both classification and summarization
+Training (with interim evaluation metrics) for classification and summarization
 """
 import transformers
 transformers.logging.set_verbosity_error()
@@ -12,6 +13,7 @@ from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
 from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation
+from model.train_model import classification_model_training, summarization_model_training
 
 def main(args: list[str]) -> None:
     config = load_config()
@@ -34,7 +36,13 @@ def main(args: list[str]) -> None:
             label_ids = label_data.set_index("icd_code")["count"].to_dict()
             checkpoint = config["model"]["classification_checkpoint"]
 
-            preprocessor = ClassificationPreprocessor(checkpoint=checkpoint, label_ids=label_ids, text_col="discharge_note", label_col="icd_codes", cleaned_path=config["data"]["task_1"]["tokenized_path"])
+            preprocessor = ClassificationPreprocessor(
+                checkpoint=checkpoint, 
+                label_ids=label_ids, 
+                text_col="discharge_note", 
+                label_col="icd_codes", 
+                cleaned_path=config["data"]["task_1"]["tokenized_path"]
+                )
 
             model_save_dir = config["model"]["classification_model"]
 
@@ -46,7 +54,13 @@ def main(args: list[str]) -> None:
             clean_path = config["data"]["task_3"]["clean_path"]
             real_target_path = config["data"]["task_3"]["real_data_path"]
             synthetic_target_path = config["data"]["task_3"]["synthetic_data_path"]
-            preprocessor = SummarizationTargetCreation(checkpoint=checkpoint, text_col="discharge_note", cleaned_path=clean_path, real_target_path=real_target_path, synthetic_target_path=synthetic_target_path)
+            preprocessor = SummarizationTargetCreation(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=clean_path, 
+                real_target_path=real_target_path, 
+                synthetic_target_path=synthetic_target_path
+                )
 
             preprocessor.preprocess(base_data)
         
@@ -54,7 +68,13 @@ def main(args: list[str]) -> None:
             base_data = load_data(config["data"]["task_3"]["clean_path"]) # Combined summaries
             tokenized_path = config["data"]["task_3"]["tokenized_path"]
             checkpoint = config["model"]["summarization_checkpoint"]
-            preprocessor = SummarizationPreprocessor(checkpoint=checkpoint, text_col="discharge_note", target_col="target", source_type_col="source_type", cleaned_path=tokenized_path)
+            preprocessor = SummarizationPreprocessor(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                target_col="target", 
+                source_type_col="source_type", 
+                cleaned_path=tokenized_path
+                )
 
             model_save_dir = config["model"]["summarization_model"]
 
@@ -67,7 +87,13 @@ def main(args: list[str]) -> None:
             clean_path = config["data"]["task_3"]["clean_path"]
             real_target_path = config["data"]["task_3"]["real_data_path"]
             synthetic_target_path = config["data"]["task_3"]["synthetic_data_path"]
-            generator = SummarizationTargetCreation(checkpoint=checkpoint, text_col="discharge_note", cleaned_path=clean_path, real_target_path=real_target_path, synthetic_target_path=synthetic_target_path)
+            generator = SummarizationTargetCreation(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=clean_path, 
+                real_target_path=real_target_path, 
+                synthetic_target_path=synthetic_target_path
+                )
 
             real_summary_path = config["data"]["task_3"]["real_summary_path"]
 
@@ -79,7 +105,13 @@ def main(args: list[str]) -> None:
             clean_path = config["data"]["task_3"]["clean_path"]
             real_target_path = config["data"]["task_3"]["real_data_path"]
             synthetic_target_path = config["data"]["task_3"]["synthetic_data_path"]
-            generator = SummarizationTargetCreation(checkpoint=checkpoint, text_col="discharge_note", cleaned_path=clean_path, real_target_path=real_target_path, synthetic_target_path=synthetic_target_path)
+            generator = SummarizationTargetCreation(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=clean_path, 
+                real_target_path=real_target_path, 
+                synthetic_target_path=synthetic_target_path
+                )
 
             synthetic_summary_path = config["data"]["task_3"]["synthetic_summary_path"]
 
@@ -91,7 +123,13 @@ def main(args: list[str]) -> None:
             clean_path = config["data"]["task_3"]["clean_path"]
             real_target_path = config["data"]["task_3"]["real_data_path"]
             synthetic_target_path = config["data"]["task_3"]["synthetic_data_path"]
-            generator = SummarizationTargetCreation(checkpoint=checkpoint, text_col="discharge_note", cleaned_path=clean_path, real_target_path=real_target_path, synthetic_target_path=synthetic_target_path)
+            generator = SummarizationTargetCreation(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=clean_path, 
+                real_target_path=real_target_path, 
+                synthetic_target_path=synthetic_target_path
+                )
 
             synthetic_summary_path = config["data"]["task_3"]["synthetic_summary_path"]
 
@@ -102,12 +140,52 @@ def main(args: list[str]) -> None:
             clean_path = config["data"]["task_3"]["clean_path"]
             real_target_path = config["data"]["task_3"]["real_data_path"]
             synthetic_target_path = config["data"]["task_3"]["synthetic_data_path"]
-            generator = SummarizationTargetCreation(checkpoint=checkpoint, text_col="discharge_note", cleaned_path=clean_path, real_target_path=real_target_path, synthetic_target_path=synthetic_target_path)
+            generator = SummarizationTargetCreation(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=clean_path, 
+                real_target_path=real_target_path, 
+                synthetic_target_path=synthetic_target_path
+                )
 
             real_summary_data = load_data(config["data"]["task_3"]["real_summary_path"])
             synthetic_summary_data = load_data(config["data"]["task_3"]["synthetic_summary_path"])
 
             generator.combine_data(real_summary_dataset=real_summary_data, synthetic_summary_dataset=synthetic_summary_data)
+    
+    elif args.command == "training":
+        if args.target == "classification":
+            tokenized_data_dir = config["data"]["task_1"]["tokenized_path"]
+            label_dir = config["data"]["task_2"]["data_path"]
+            checkpoint = config["model"]["classification_checkpoint"]
+            model_weights_dir = config["model"]["classification_model"]
+            training_checkpoints = config["model"]["classification_training_checkpoints"]
+            test_data_dir = config["data"]["classification_test_data"]
+
+            classification_model_training(
+                data_dir=tokenized_data_dir, 
+                label_dir=label_dir, 
+                checkpoint=checkpoint, 
+                save_dir=model_weights_dir, 
+                training_checkpoint_dir=training_checkpoints,
+                test_data_dir=test_data_dir
+                )
+        
+        elif args.target == "summarization":
+            tokenized_data_dir = config["data"]["task_3"]["tokenized_path"]
+            checkpoint = config["model"]["summarization_checkpoint"]
+            model_weights_dir = config["model"]["summarization_model"]
+            training_checkpoints = config["model"]["summarization_training_checkpoints"]
+            test_data_dir = config["data"]["summarization_test_data"]
+
+            summarization_model_training(
+                data_dir=tokenized_data_dir,
+                checkpoint=checkpoint,
+                save_dir=model_weights_dir,
+                training_checkpoint_dir=training_checkpoints,
+                test_data_dir=test_data_dir
+            )
+
 
 
 
@@ -124,6 +202,9 @@ if __name__ == "__main__":
 
     preprocess_parser = subparsers.add_parser("preprocess")
     preprocess_parser.add_argument("target", choices=["classification", "summary_generation", "summarization"], help="Specify which preprocess pipeline(s) to initiate")
+
+    training_parser = subparsers.add_parser("training")
+    training_parser.add_argument("target", choices=["classification", "summarization"], help="Denote which training pipeline is being used.")
 
     args = parser.parse_args()
 
