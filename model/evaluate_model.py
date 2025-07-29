@@ -52,8 +52,8 @@ class SummarizationMetrics:
         decoded_preds = [pred.strip() for pred in decoded_preds]
         decoded_labels = [label.strip() for label in decoded_labels]
 
-        rouge_results = rouge.compute(predictions=decoded_preds, references=decoded_labels, rouge_types=["rougeL"], use_stemmer=True)
-        bert_results = bertscore.compute(predictions=decoded_preds, references=decoded_labels, lang="en")
+        rouge_results = self.rouge.compute(predictions=decoded_preds, references=decoded_labels, rouge_types=["rougeL"], use_stemmer=True)
+        bert_results = self.bertscore.compute(predictions=decoded_preds, references=decoded_labels, lang="en")
 
         return {
             "rougeL": rouge_results["rougeL"].mid.fmeasure * 100,
