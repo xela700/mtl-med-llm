@@ -5,9 +5,16 @@ Module to set up training tasks for all NLP models.
 from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
+from transformers.modeling_outputs import SequenceClassifierOutput
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_dataset
 from data.fetch_data import load_data
+from model.evaluate_model import classification_compute_metric, SummarizationMetrics
+import torch
+import numpy as np
+from torch import Tensor
+from datasets import Dataset
+from typing import Union, Dict, Tuple
 
 def classification_model_training(data_dir: str, label_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
     """
@@ -62,22 +69,50 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
         save_strategy="epoch",
         logging_dir="./logs",
         load_best_model_at_end=True,
-        metric_for_best_model="f1",
+        metric_for_best_model="f1_macro",
         greater_is_better=True
     )
 
-    trainer = Trainer(
+    pos_weight = compute_pos_weight(train_dataset)
+
+    class WeightedLossTrainer(Trainer):
+        """
+        Custom Trainer subclass intended to help tackle ICD-10 class imbalance in MIMIC-IV dataset.
+        Only used with trainer for classification. 
+        """    
+        def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
+            """
+            Compute loss function that provides new loss function based on positive class weights.
+
+            Parameters:
+            model: classification training model
+            inputs: dictionary of the training inputs
+            return_outputs: controlled by HuggingFace Trainer class. False during training (only loss needed). True for evaluation/prediction.
+
+            Returns: tuple with the loss and model outputs or just the loss, depending on stage.
+            """
+            labels = inputs.get("labels")
+            outputs = model(**inputs)
+            logits = outputs.logits
+
+            loss_function = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(logits.device))
+            loss = loss_function(logits, labels.float())
+
+            return (loss, outputs) if return_outputs else loss
+
+    trainer = WeightedLossTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
-        data_collator=data_collator
+        data_collator=data_collator,
+        compute_metrics=classification_compute_metric
     )
 
     trainer.train()
 
-    model.save_pretrained(save_dir)
+    model.save_pretrained(save_dir) # PEFT saved weights
     tokenizer.save_pretrained(save_dir)
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
@@ -129,18 +164,42 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         greater_is_better=True
     )
 
+    compute_metrics = SummarizationMetrics(tokenizer=tokenizer)
+
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        data_collator=data_collator
+        data_collator=data_collator,
+        compute_metrics=compute_metrics
     )
 
     trainer.train()
 
     model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
+    
+def compute_pos_weight(dataset: Dataset) -> Tensor:
+    """
+    Function to calculate positive class weight for classification pipeline. Intended to help with class imbalance
+    by increasing the penalty of positive labels.
+
+    Parameters:
+    dataset: HuggingFace dataset with a "labels" column
+    labels is expected to contain multi-hot vectors
+
+    Returns:
+    Tensor of positive class weight for each class
+    """
+    all_labels = np.array(dataset["labels"])
+
+    positive_counts = all_labels.sum(axis=0)
+    total_samples = all_labels.shape[0]
+    negative_counts = total_samples - positive_counts
+
+    pos_weight = negative_counts / (positive_counts + 1e-5)
+    return torch.tensor(pos_weight, dtype=torch.float32)
 
 
 

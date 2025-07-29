@@ -11,6 +11,7 @@ cramjam==2.10.0
 datasets==3.6.0
 db-dtypes==1.4.3
 dill==0.3.8
+evaluate==0.4.5
 fastparquet==2024.11.0
 filelock==3.18.0
 frozenlist==1.7.0
