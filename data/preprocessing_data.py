@@ -244,7 +244,6 @@ class ClassificationPreprocessor(TextPreprocessor):
                     label_vector[idx] = 1.0
             multi_hot_labels.append(label_vector)
 
-        # Sanity check
         assert len(multi_hot_labels) == len(batch[self.text_col]), "Label count doesn't match batch size!"
 
         # for i, labels in enumerate(batch[self.label_col]):
@@ -389,13 +388,15 @@ class SummarizationPreprocessor(TextPreprocessor):
         # preprocess input text (i.e. entire clinical notes)
         tokenized_data = self.tokenizer( 
             input_text,
-            truncation=True
+            truncation=True,
+            max_length=1024
         )
 
         with self.tokenizer.as_target_tokenizer(): # preprocess target text (i.e. summaries)
             labels = self.tokenizer(
                 target_text,
-                truncation=True
+                truncation=True,
+                max_length=1024
             )["input_ids"]
 
         tokenized_data["labels"] = labels
@@ -405,7 +406,7 @@ class SummarizationPreprocessor(TextPreprocessor):
         
         dataset = Dataset.from_pandas(dataframe)
 
-        dataset = dataset.map(self.preprocess_function, batched=True)
+        dataset = dataset.map(self.preprocess_function, batched=True, remove_columns=["discharge_note", "target", "source_type"])
 
         if os.path.exists(self.cleaned_path):
             logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")

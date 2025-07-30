@@ -2,7 +2,7 @@
 Module to set up training tasks for all NLP models.
 """
 
-from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq
+from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
@@ -13,6 +13,7 @@ from model.evaluate_model import classification_compute_metric, SummarizationMet
 import torch
 import numpy as np
 from torch import Tensor
+from torch.utils.data import DataLoader
 from datasets import Dataset
 from typing import Union, Dict, Tuple
 
@@ -137,8 +138,8 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     test_dataset.save_to_disk(test_data_dir)
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-    model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint)
-    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True)
+    model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint, torch_dtype=torch.float16)
+    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True, model=model, label_pad_token_id=-100, pad_to_multiple_of=8)
 
     lora_config = LoraConfig( # PERF tuning
         r=8,
@@ -151,28 +152,35 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
 
     model = get_peft_model(model, lora_config)
 
-    training_args = TrainingArguments(
+    training_args = Seq2SeqTrainingArguments(
         output_dir=training_checkpoint_dir,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=3,
+        per_device_train_batch_size=1,
+        per_device_eval_batch_size=1,
         num_train_epochs=3,
         logging_dir="./logs",
-        save_strategy="epoch",
+        save_strategy="steps",
+        eval_strategy="steps",
+        eval_steps=100,
+        save_steps=100,
+        logging_steps=50,
         save_total_limit=2,
         load_best_model_at_end=True,
-        metric_for_best_model="rougeL",
-        greater_is_better=True
+        metric_for_best_model="eval_loss",
+        greater_is_better=True,
+        predict_with_generate=False,
+        fp16=True
     )
 
-    compute_metrics = SummarizationMetrics(tokenizer=tokenizer)
+    # compute_metrics = SummarizationMetrics(tokenizer=tokenizer)
 
-    trainer = Trainer(
+    trainer = Seq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
+        processing_class=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics
+        compute_metrics=None
     )
 
     trainer.train()
