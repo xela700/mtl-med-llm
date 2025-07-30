@@ -7,7 +7,7 @@ from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
 from peft import get_peft_model, LoraConfig, TaskType
-from datasets import load_dataset
+from datasets import load_from_disk
 from data.fetch_data import load_data
 from model.evaluate_model import classification_compute_metric, SummarizationMetrics
 import torch
@@ -29,9 +29,9 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
     test_data_dir (str): path to save test data to
     """
 
-    dataset = load_dataset(data_dir)
-    train_val_test = dataset["train"].train_test_split(test_size=0.2)
-    train_val = train_val_test["train"].train_test_split(test_size=0.1)
+    dataset = load_from_disk(data_dir)
+    train_val_test = dataset.train_test_split(test_size=0.2, seed=42)
+    train_val = train_val_test["train"].train_test_split(test_size=0.1, seed=42)
 
     train_dataset = train_val["train"]
     val_dataset = train_val["test"]
@@ -80,7 +80,7 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
         Custom Trainer subclass intended to help tackle ICD-10 class imbalance in MIMIC-IV dataset.
         Only used with trainer for classification. 
         """    
-        def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
+        def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False, **kwargs) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
             """
             Compute loss function that provides new loss function based on positive class weights.
 
@@ -105,7 +105,7 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=classification_compute_metric
     )
@@ -126,9 +126,9 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     test_data_dir (str): path to save test data to
     """
 
-    dataset = load_dataset(data_dir)
-    train_val_test = dataset["train"].train_test_split(test_size=0.2)
-    train_val = train_val_test["train"].train_test_split(test_size=0.1)
+    dataset = load_from_disk(data_dir)
+    train_val_test = dataset.train_test_split(test_size=0.2, seed=42)
+    train_val = train_val_test["train"].train_test_split(test_size=0.1, seed=42)
 
     train_dataset = train_val["train"]
     val_dataset = train_val["test"]

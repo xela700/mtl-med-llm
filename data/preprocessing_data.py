@@ -7,6 +7,7 @@ import re
 import logging
 import pandas as pd
 import os
+import shutil
 import torch
 from tqdm import tqdm
 from pathlib import Path
@@ -231,17 +232,61 @@ class ClassificationPreprocessor(TextPreprocessor):
             text = self.classification_extract_sections(text)
             processed_texts.append(text)
 
-        tokenized_data = self.tokenizer(processed_texts, truncation=True, return_tensors=None)
-
-        self.label_ids = {code: idx for idx, code in enumerate(self.label_ids.keys())}
+        tokenized_data = self.tokenizer(processed_texts, truncation=True, max_length=512, return_tensors=None)
 
         multi_hot_labels = []
+
         for labels in batch[self.label_col]:
-            label_vector = [0] * len(self.label_ids)
+            label_vector = [0.0] * len(self.label_ids)
             for label in labels:
-                if label in self.label_ids:
-                    label_vector[self.label_ids[label]] = 1
+                idx = self.label_ids.get(label)
+                if idx is not None:
+                    label_vector[idx] = 1.0
             multi_hot_labels.append(label_vector)
+
+        # Sanity check
+        assert len(multi_hot_labels) == len(batch[self.text_col]), "Label count doesn't match batch size!"
+
+        # for i, labels in enumerate(batch[self.label_col]):
+        #     label_vector = [0] * len(self.label_ids)
+
+        #     if not isinstance(labels, list):
+        #         raise ValueError(f"Sample {i} — labels is not a list: {labels} (type: {type(labels)})")
+
+        #     for label in labels:
+        #         if not isinstance(label, str):
+        #             raise ValueError(f"Sample {i} — label is not a string: {label} (type: {type(label)})")
+
+        #         idx = self.label_ids.get(label)
+        #         if idx is not None:
+        #             label_vector[idx] = 1
+        #         else:
+        #             print(f"Sample {i} — label '{label}' not in label_ids, skipping.")
+
+        # if len(label_vector) != len(self.label_ids):
+        #     raise ValueError(f"Sample {i} — label_vector length mismatch: {len(label_vector)}")
+
+        # multi_hot_labels.append(label_vector)
+
+        # for labels in batch.get(self.label_col, []):
+        #     if not isinstance(labels, list):
+        #         labels = []
+            
+        #     label_vector = [0] * len(self.label_ids)
+
+        #     for label in labels:
+        #         index = self.label_ids.get(label)
+        #         if index is not None:
+        #             label_vector[index] = 1
+            
+        #     multi_hot_labels.append(label_vector)
+        # for labels in batch[self.label_col]:
+        #     label_vector = [0] * len(self.label_ids)
+        #     for label in labels:
+        #         if label in self.label_ids:
+        #             label_vector[self.label_ids[label]] = 1
+        #     multi_hot_labels.append(label_vector)
+
         tokenized_data["labels"] = multi_hot_labels
 
         return tokenized_data
@@ -283,13 +328,18 @@ class ClassificationPreprocessor(TextPreprocessor):
 
         dataset = Dataset.from_pandas(dataframe)
 
-        dataset.filter(self.filter_text_by_label, batched=True)
-        dataset.map(self.preprocess_function, batched=True)
+        dataset = dataset.filter(self.filter_text_by_label, batched=True)
+        dataset = dataset.map(self.preprocess_function, batched=True)
 
         if os.path.exists(self.cleaned_path):
             logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
         
         clean_path = Path(self.cleaned_path)
+
+        # Deletes old dataset to prevent conflits
+        if os.path.exists(clean_path):
+            logger.info(f"Deleting old dataset at {clean_path}")
+            shutil.rmtree(path=clean_path)
 
         dataset.save_to_disk(str(clean_path))
 
@@ -355,12 +405,17 @@ class SummarizationPreprocessor(TextPreprocessor):
         
         dataset = Dataset.from_pandas(dataframe)
 
-        dataset.map(self.preprocess_function, batched=True)
+        dataset = dataset.map(self.preprocess_function, batched=True)
 
         if os.path.exists(self.cleaned_path):
             logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
 
         clean_path = Path(self.cleaned_path)
+
+        # Deletes old dataset to prevent conflits
+        if os.path.exists(clean_path):
+            logger.info(f"Deleting old dataset at {clean_path}")
+            shutil.rmtree(path=clean_path)
 
         dataset.save_to_disk(str(clean_path))
 

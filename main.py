@@ -33,7 +33,7 @@ def main(args: list[str]) -> None:
         if args.target == "classification":
             base_data = load_data(config["data"]["task_1"]["data_path"])
             label_data = load_data(config["data"]["task_2"]["data_path"])
-            label_ids = label_data.set_index("icd_code")["count"].to_dict()
+            label_ids = {code: i for i, code in enumerate(sorted(label_data["icd_code"].unique()))}
             checkpoint = config["model"]["classification_checkpoint"]
 
             preprocessor = ClassificationPreprocessor(
