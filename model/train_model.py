@@ -248,6 +248,7 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
     training_args = TrainingArguments(
         output_dir=training_checkpoint_dir,
         eval_strategy="epoch",
+        save_strategy="epoch",
         logging_strategy="epoch",
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
