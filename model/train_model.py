@@ -9,9 +9,10 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
-from model.evaluate_model import classification_compute_metric, SummarizationMetrics
+from model.evaluate_model import classification_compute_metric, SummarizationMetrics,intent_compute_metrics
 import torch
 import numpy as np
+import json
 from torch import Tensor
 from torch.utils.data import DataLoader
 from datasets import Dataset
@@ -208,6 +209,71 @@ def compute_pos_weight(dataset: Dataset) -> Tensor:
 
     pos_weight = negative_counts / (positive_counts + 1e-5)
     return torch.tensor(pos_weight, dtype=torch.float32)
+
+
+def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
+    """
+    Training pipeline for intent targeting (between classification and summarization for now).
+
+    Parameters:
+    data_dir (str): path to dataset being used for training
+    checkpoint (str): pre-trained HuggingFace model used for training
+    save_dir (str): path to saved PEFT weights for specified task
+    test_data_dir (str): path to save test data to
+    """
+
+    dataset = Dataset.load_from_disk(data_dir)
+
+    dataset = dataset.train_test_split(test_size=0.2)
+    train_dataset = dataset["train"]
+    test_dataset = dataset["test"]
+
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+
+    with open("data\cleaned_data\intent_label2id.json") as file:
+        label2id = json.load(file)
+    
+    with open("data\cleaned_data\intent_id2label.json") as file:
+        id2label = json.load(file)
+
+    model = AutoModelForSequenceClassification.from_pretrained(
+        checkpoint,
+        num_labels=len(label2id),
+        label2id=label2id,
+        id2label=id2label
+    )
+
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    training_args = TrainingArguments(
+        output_dir=training_checkpoint_dir,
+        eval_strategy="epoch",
+        logging_strategy="epoch",
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        num_train_epochs=3,
+        learning_rate=2e-5,
+        weight_decay=0.01,
+        load_best_model_at_end=True,
+        metric_for_best_model="accuracy"
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=test_dataset,
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+        compute_metrics=intent_compute_metrics
+    )
+
+    trainer.train()
+
+    model.save_pretrained(save_dir) # PEFT saved weights
+    tokenizer.save_pretrained(save_dir)
+
+
 
 
 

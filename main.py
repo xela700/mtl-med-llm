@@ -15,7 +15,7 @@ from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
 from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor
-from model.train_model import classification_model_training, summarization_model_training
+from model.train_model import classification_model_training, summarization_model_training, intent_model_training
 
 def main(args: list[str]) -> None:
     config = load_config()
@@ -209,6 +209,19 @@ def main(args: list[str]) -> None:
                 training_checkpoint_dir=training_checkpoints,
                 test_data_dir=test_data_dir
             )
+        
+        elif args.target == "intent_targeting":
+            tokenized_data_dir = config["data"]["task_4"]["tokenized_path"]
+            checkpoint = config["model"]["intent_checkpoint"]
+            model_weights_dir = config["model"]["intent_model"]
+            training_checkpoints = config["model"]["intent_training_checkpoints"]
+
+            intent_model_training(
+                data_dir=tokenized_data_dir,
+                checkpoint=checkpoint,
+                save_dir=model_weights_dir,
+                training_checkpoint_dir=training_checkpoints
+            )
 
 
 
@@ -228,7 +241,7 @@ if __name__ == "__main__":
     preprocess_parser.add_argument("target", choices=["classification", "summary_generation", "summarization", "intent_targeting"], help="Specify which preprocess pipeline(s) to initiate")
 
     training_parser = subparsers.add_parser("training")
-    training_parser.add_argument("target", choices=["classification", "summarization"], help="Denote which training pipeline is being used.")
+    training_parser.add_argument("target", choices=["classification", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")
 
     args = parser.parse_args()
 

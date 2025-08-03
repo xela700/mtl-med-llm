@@ -59,3 +59,11 @@ class SummarizationMetrics:
             "rougeL": rouge_results["rougeL"].mid.fmeasure * 100,
             "bertscore_f1": np.mean(bert_results["f1"]) * 100
         }
+
+
+def intent_compute_metrics(eva_pred):
+    accuracy = load("accuracy")
+
+    logits, labels = eva_pred
+    predictions = torch.tensor(logits).argmax(dim=-1)
+    return accuracy.compute(predictions=predictions, references=labels)
