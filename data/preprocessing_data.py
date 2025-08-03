@@ -655,7 +655,7 @@ class IntentTargetingPreprocessor(TextPreprocessor):
         Returns:
         str: Same text with a random prompt prepended.
         """
-        intent = sample["intent"]
+        intent = sample["label"]
         prompts = self.intent_prompts.get(intent, [""])
         prompt = random.choice(prompts)
         return prompt + sample[self.text_col]
@@ -673,15 +673,19 @@ class IntentTargetingPreprocessor(TextPreprocessor):
         """
 
         processed_texts = []
-        for text in batch[self.text_col]:
-            text = self.remove_blank_sections(text)
+        for i in range(len(batch[self.text_col])):
+            sample = {
+                self.text_col: batch[self.text_col][i],
+                "label": batch["label"][i]
+            }
+            text = self.remove_blank_sections(sample[self.text_col])
             text = self.normalize_deidentified_blanks(text)
-            text = self.prepend_random_prompt(text)
+            text = self.prepend_random_prompt(sample)
             processed_texts.append(text)
         
         tokenized = self.tokenizer(processed_texts, truncation=True, max_length=512)
 
-        tokenized["label"] = [self.label2id[intent] for intent in batch["intent"]]
+        tokenized["label"] = [self.label2id[intent] for intent in batch["label"]]
 
         return tokenized
     
@@ -696,7 +700,7 @@ class IntentTargetingPreprocessor(TextPreprocessor):
         """
 
         if self.text_col != "input":
-            dataframe.rename(columns={self.text_col, "input"}, inplace=True)
+            dataframe.rename(columns={self.text_col: "input"}, inplace=True)
             self.text_col = "input"
         
         half_df = dataframe.sample(frac=0.5, random_state=42).index
@@ -711,14 +715,16 @@ class IntentTargetingPreprocessor(TextPreprocessor):
 
         # Saving the label data for use with the model and for inference
         with open("data\cleaned_data\intent_label2id.json", "w") as file:
+            self.label2id = {str(k): int(v) for k, v in self.label2id.items()}
             json.dump(self.label2id, file)
         
         with open("data\cleaned_data\intent_id2label.json", "w") as file:
+            self.id2label = {int(k): str(v) for k, v in self.id2label.items()}
             json.dump(self.id2label, file)
         
         dataset = Dataset.from_pandas(dataframe)
 
-        dataset = dataset.map(self.preprocess_function, batched=True, remove_columns=dataset.column_names)
+        dataset = dataset.map(self.preprocess_function, batched=True)
 
         if os.path.exists(self.cleaned_path):
             logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
