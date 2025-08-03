@@ -36,6 +36,11 @@ data:
     synthetic_summary_path: data/cleaned_data/synthetic_summary_dataset
     clean_path: data/cleaned_data/summarization_dataset.parquet
     tokenized_path: data/cleaned_data/summarization_dataset_tokenized
+
+  task_4:
+    description: "Data related to intent targeting for classification/summarization. Can use portion of base data from task_3."
+    data_path: data/raw_data/intent_data.parquet
+    tokenized_path: data/cleaned_data/intent_dataset_tokenized
   
   classification_test_data: data/test_data/classification_test_data
   summarization_test_data: data/test_data/summarization_test_data
@@ -43,7 +48,13 @@ data:
 model:
   classification_checkpoint: dmis-lab/biobert-large-cased-v1.1
   summarization_checkpoint: GanjinZero/biobart-v2-large
+  intent_checkpoint: distilbert/distilbert-base-uncased
+
   classification_model: model/saved_model/ft-biobert-large
   classification_training_checkpoints: model/saved_model/ft-biobert-large-checkpoints
+
   summarization_training_checkpoints: model/saved_model/ft-biobart-large-checkpoints
   summarization_model: model/saved_model/ft-biobart-large
+
+  intent_training_checkpoints: model/saved_model/ft-distilbert-base-checkpoints
+  intent_model: model/saved_model/ft-distilbert-base

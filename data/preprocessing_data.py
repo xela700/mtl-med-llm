@@ -272,7 +272,7 @@ class ClassificationPreprocessor(TextPreprocessor):
             filtered.append(keep)
         return filtered
 
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
         Full preprocess steps for classification. Renames columns to appropriate names.
         Converts dataframe to a dataset. Filters samples without any applicable training labels.
@@ -304,6 +304,9 @@ class ClassificationPreprocessor(TextPreprocessor):
             shutil.rmtree(path=clean_path)
 
         dataset.save_to_disk(str(clean_path))
+
+        if save_dir:
+            self.tokenizer.save_pretrained(save_directory=save_dir)
     
         
 
@@ -361,7 +364,7 @@ class SummarizationPreprocessor(TextPreprocessor):
         tokenized_data["labels"] = labels
         return tokenized_data
     
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         
         dataset = Dataset.from_pandas(dataframe)
 
@@ -378,6 +381,9 @@ class SummarizationPreprocessor(TextPreprocessor):
             shutil.rmtree(path=clean_path)
 
         dataset.save_to_disk(str(clean_path))
+
+        if save_dir:
+            self.tokenizer.save_pretrained(save_directory=save_dir)
 
 
 class SummarizationTargetCreation(TextPreprocessor):
@@ -561,7 +567,7 @@ class SummarizationTargetCreation(TextPreprocessor):
                 append=file_exists_and_valid
                 )
 
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
         Cleans text by removing sections that are always blank and inserting representative placeholders in remaining blanks.
         Breaks data up to generate real and sythetic summaries.
@@ -578,6 +584,9 @@ class SummarizationTargetCreation(TextPreprocessor):
 
         data_for_real_targets.to_parquet(self.real_target_path)
         data_for_synthetic_targets.to_parquet(self.synthetic_target_path)
+
+        if save_dir:
+            self.tokenizer.save_pretrained(save_directory=save_dir)
     
     def combine_data(self, real_summary_dataset: pd.DataFrame, synthetic_summary_dataset: pd.DataFrame) -> None:
         """
@@ -676,7 +685,7 @@ class IntentTargetingPreprocessor(TextPreprocessor):
 
         return tokenized
     
-    def preprocess(self, dataframe: pd.DataFrame) -> None:
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
         Splits dataframe in half and applies either classification or summarization intent to each half at random. 
         Then applies base preprocessing and prepends a correlating prompt based on intent.
@@ -722,6 +731,9 @@ class IntentTargetingPreprocessor(TextPreprocessor):
             shutil.rmtree(path=clean_path)
 
         dataset.save_to_disk(str(clean_path))
+
+        if save_dir:
+            self.tokenizer.save_pretrained(save_directory=save_dir)
         
         
         

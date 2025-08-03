@@ -9,10 +9,12 @@ Training (with interim evaluation metrics) for classification and summarization
 import transformers
 transformers.logging.set_verbosity_error()
 import argparse
+import pandas as pd
+import os
 from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
-from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation
+from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor
 from model.train_model import classification_model_training, summarization_model_training
 
 def main(args: list[str]) -> None:
@@ -79,6 +81,28 @@ def main(args: list[str]) -> None:
             model_save_dir = config["model"]["summarization_model"]
 
             preprocessor.preprocess(base_data, save_dir=model_save_dir)
+        
+        elif args.target == "intent_targeting":
+            intent_path = config["data"]["task_4"]["data_path"]
+            if os.path.exists(intent_path):
+                intent_data = load_data(config["data"]["task_4"]["data_path"])
+            else:
+                base_data = load_data(config["data"]["task_3"]["data_path"])
+                intent_data = base_data.sample(n=300, random_state=42) # Don't need thousands of samples to train small intent targeting model at this time.
+                intent_data.to_parquet(intent_path)
+            
+            checkpoint = config["model"]["intent_checkpoint"]
+            clean_path = config["data"]["task_4"]["tokenized_path"]
+            
+            preprocessor = IntentTargetingPreprocessor(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=clean_path)
+
+            preprocessor.preprocess(intent_data)
+
+                
+
     
     elif args.command == "summary_generation":
         if args.target == "real":
@@ -201,7 +225,7 @@ if __name__ == "__main__":
     generation_parser.add_argument("target", choices=["real", "synthetic", "synthetic_continue", "combine"], help="Specify target creation for summary task. Combine unites both types of targets into one dataset.")
 
     preprocess_parser = subparsers.add_parser("preprocess")
-    preprocess_parser.add_argument("target", choices=["classification", "summary_generation", "summarization"], help="Specify which preprocess pipeline(s) to initiate")
+    preprocess_parser.add_argument("target", choices=["classification", "summary_generation", "summarization", "intent_targeting"], help="Specify which preprocess pipeline(s) to initiate")
 
     training_parser = subparsers.add_parser("training")
     training_parser.add_argument("target", choices=["classification", "summarization"], help="Denote which training pipeline is being used.")
