@@ -116,6 +116,7 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
 
     model.save_pretrained(save_dir) # PEFT saved weights
     tokenizer.save_pretrained(save_dir)
+    model.config.save_pretrained(save_dir)
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
     """
@@ -271,7 +272,7 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
 
     trainer.train()
 
-    model.save_pretrained(save_dir) # PEFT saved weights
+    model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
 
 
