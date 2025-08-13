@@ -28,12 +28,12 @@ class TextPreprocessor(ABC):
     Parent class for preprocessing text imported from dataset.
 
     Attributes:
-    checkpoint (str): The associated HuggingFace model. Must match model used in training.
-    text_col (str): Column that contains the text to be cleaned and tokenized
-    remove_sections (list[str]): Optional section headers used to remove sections of clinical
-    notes. Default of 'None' results in removal of sections that will always be blank due to 
-    de-identification
-    cleaned_path (str): path string for saving cleaned dataset
+        tokenizer (PreTrainedTokenizerBase): The associated HuggingFace model. Must match model used in training.
+        text_col (str): Column that contains the text to be cleaned and tokenized
+        remove_sections (list[str]): Optional section headers used to remove sections of clinical
+        notes. Default of 'None' results in removal of sections that will always be blank due to 
+        de-identification
+        cleaned_path (str): path string for saving cleaned dataset
     """
 
     __slots__ = ("tokenizer", "text_col", "remove_sections", "cleaned_path")
@@ -49,15 +49,15 @@ class TextPreprocessor(ABC):
         """
         Initializes the tokenizer to be used in preprocessing.
 
-        Parameters:
-        checkpoint (str): Checkpoint to be used to determine the model. Must be the 
-        same as the checkpoint used in training.
+        Args:
+            checkpoint (str): Checkpoint to be used to determine the model. Must be the 
+            same as the checkpoint used in training.
 
         Returns:
-        PreTrainedTokenizerBase: tokenizer for the model
+            PreTrainedTokenizerBase: tokenizer for the model
 
         Raises:
-        ValueError/OSError if checkpoint provided does not exist or is inaccessible
+            ValueError/OSError: if checkpoint provided does not exist or is inaccessible
         """
 
         try:
@@ -73,11 +73,11 @@ class TextPreprocessor(ABC):
         Removed redacted sections from MIMIC data that occur as a result of the
         deindentification process.
 
-        Parameters:
-        note (str): clinical note to be stripped of unneeded sections
+        Args:
+            note (str): clinical note to be stripped of unneeded sections
 
-        Return:
-        str: clinical note stripped of blank sections
+        Returns:
+            str: clinical note stripped of blank sections
         """
 
         if self.remove_sections is None:
@@ -121,11 +121,11 @@ class TextPreprocessor(ABC):
         """
         Inserts standard placeholder text inplace of de-identified blanks where applicable.
 
-        Parameters:
-        text (str): Input text w/ de-identified blanks from MIMIC notes
+        Args:
+            text (str): Input text w/ de-identified blanks from MIMIC notes
 
         Returns:
-        str: Text w/ replacement placeholders for training
+            str: Text w/ replacement placeholders for training
         """
 
         replacements = {
@@ -148,8 +148,11 @@ class TextPreprocessor(ABC):
         Full preprocess pipeline for specific task. Takes a dataframe, cleans it, applies tokenization and filtering where applicable,
         and saves it to a new location for use during model training.
 
-        Parameters:
-        dataframe: data to undergo preprocessing.
+        Args:
+            dataframe (pd.DataFrame): data to undergo preprocessing.
+        
+        Returns:
+            None
         """
         pass
     
@@ -161,11 +164,11 @@ class ClassificationPreprocessor(TextPreprocessor):
     Requires labels (ICD-10 codes) paired with input text.
 
     Attributes:
-    label_ids -> Separate label-specific query. Current plan to use initial dataset and group by
-    ICD-10 codes. Only training on most frequent 2k - 5k codes (out of 70k) to reduce chance of no relevant
-    samples.
-    label_col -> Column in the full dataset that contains the ICD-10 labels for a given clinical note.
-    extract_sections -> Sections of full text most relevant for classification.
+        label_ids (dict[str:int]): Separate label-specific query. Current plan to use initial dataset and group by
+        ICD-10 codes. Only training on most frequent 2k - 5k codes (out of 70k) to reduce chance of no relevant
+        samples.
+        label_col (str): Column in the full dataset that contains the ICD-10 labels for a given clinical note.
+        extract_sections (list[str]): Sections of full text most relevant for classification.
     """
 
     __slots__ = ("label_ids", "extract_sections", "label_col", "data_collator")
@@ -181,12 +184,12 @@ class ClassificationPreprocessor(TextPreprocessor):
         Captures relevant sections for ICD code classification. Used to limit the input size of a given sample while minimizing
         context loss. Only intended for classification task and not summarization.
 
-        Parameters:
-        text (str): Input discharge notes with extractable sections
-        sections (list[str]): sections to keep from text. If none provided, a default set is used
+        Args:
+            text (str): Input discharge notes with extractable sections
+            sections (list[str]): sections to keep from text. If none provided, a default set is used
 
         Returns:
-        str: Extracted sections from text joined together 
+            str: Extracted sections from text joined together 
         """
 
         if self.extract_sections is None:
@@ -220,12 +223,11 @@ class ClassificationPreprocessor(TextPreprocessor):
         Preprocess function to be mapped using dataset specific to classification task.
         To be used with dataset.map() method.
 
-        Parameters:
-        batch (dict[list[str]]): batch from dataset
+        Args:
+            batch (dict[list[str]]): batch from dataset
 
         Returns:
-        Modified data in dataset. Text field tokenized based on tokenizer.
-        Multi-hot label vectors created using top k labels.
+            dict[str:list[int]]: Modified data in dataset. Text field tokenized based on tokenizer. Multi-hot label vectors created using top k labels.
         """
 
         processed_texts = []
@@ -259,12 +261,12 @@ class ClassificationPreprocessor(TextPreprocessor):
         Filtering method to check for the presence of one (or more) ICD labels that are being used during
         training. To be used with dataset.filter() method
 
-        Parameters:
-        batch: dataset batch being provided to check for label presence
+        Args:
+            batch (dict[str:list[str]]): dataset batch being provided to check for label presence
 
-        Return:
-        list[bool]: true if at least one label is present. filtered represents booleans that determine whether
-        a note stays or gets dropped. 
+        Returns:
+            list[bool]: true if at least one label is present. filtered represents booleans that determine whether
+            a note stays or gets dropped. 
         """
         filtered = []
         for icd_codes in batch.get("labels", []):
@@ -278,8 +280,11 @@ class ClassificationPreprocessor(TextPreprocessor):
         Converts dataframe to a dataset. Filters samples without any applicable training labels.
         Maps preprocess function. Finally, saves dataset to disk for reuse.
 
-        Parameters:
-        dataframe: full dataframe for classification preprocessing
+        Args:
+            dataframe (pd.DataFrame): full dataframe for classification preprocessing
+        
+        Returns:
+            None
         """
         if self.text_col != "input":
             dataframe.rename(columns={self.text_col: "input"}, inplace=True)
@@ -320,8 +325,8 @@ class SummarizationPreprocessor(TextPreprocessor):
     summaries generated by an LLM.
 
     Attributes:
-    target_col -> summary targets in the dataframe
-    source_type_col -> tracking column for whether the summary target is 'real' (pulled from data) or 'synthetic' (generated by LLM)
+        target_col (str): summary targets in the dataframe
+        source_type_col (str): tracking column for whether the summary target is 'real' (pulled from data) or 'synthetic' (generated by LLM)
     """
 
     __slots__ = ("target_col", "source_type_col")
@@ -337,12 +342,11 @@ class SummarizationPreprocessor(TextPreprocessor):
         Preprocess function to be mapped using dataset specific to summarization task.
         To be used with dataset.map() method.
 
-        Parameters:
-        batch (dict[list[str]]): batch from dataset
+        Args:
+            batch (dict[list[str]]): batch from dataset
 
         Returns:
-        Modified data in dataset. Text field tokenized based on tokenizer.
-        Multi-hot label vectors created using top k labels.
+            dict[str:list[str]]: Modified data in dataset. Text field tokenized based on tokenizer. Multi-hot label vectors created using top k labels.
         """
         input_text = batch[self.text_col]
         target_text = batch[self.target_col]
@@ -391,12 +395,12 @@ class SummarizationTargetCreation(TextPreprocessor):
     Preprocessor for raw data intended for summarization. Used to clean data and prepare for input into LLM to create synthetic targets.
 
     Attributes:
-    checkpoint -> model base being used to generate synthetic summaries
-    text_col -> column with text
-    extract_sections -> section from text to be extracted for use as real training targets
-    model -> model for generating synthetic summaries (uses same checkpoint)
-    device -> GPU or CPU for summary generation. Will use GPU if available.
-    summarizer -> pipeline for generating summaries
+        extract_sections (list[str]): section from text to be extracted for use as real training targets
+        real_target_path (str): path to save real summary data
+        synthetic_target_path (str): path to save synthetic summary data
+        model (AutoModel): model for generating synthetic summaries (uses same checkpoint)
+        device (int): GPU or CPU for summary generation. Will use GPU if available.
+        summarizer (pipeline): pipeline for generating summaries
     """
 
     __slots__ = ("extract_sections", "model", "device", "summarizer", "real_target_path", "synthetic_target_path")
@@ -416,13 +420,13 @@ class SummarizationTargetCreation(TextPreprocessor):
         Helper function for extract_target. Extracts sections from text and returns them if they exist in a combined 
         format. (Only one should exist)
 
-        Parameters:
-        text (str): text to have portion(s) extracted
-        extract_sections (list[str]): section(s) being extracted from text
+        Args:
+            text (str): text to have portion(s) extracted
+            extract_sections (list[str]): section(s) being extracted from text
 
         Returns:
-        str: text from extracted sections
-        None: returns nothing if section doesn't exist
+            str: text from extracted sections
+            None: returns nothing if section doesn't exist
         """
 
 
@@ -454,9 +458,12 @@ class SummarizationTargetCreation(TextPreprocessor):
         Takes a training dataframe and pulls out section intended to represent a target summarization.
         This dataframe is not to be used for creating synthetic targets.
 
-        Parameters:
-        dataframe: Dataframe with only text (SEPARATE FROM SYNTHETIC DF) -> to have representative summary extracted
-        save_path (str): Path to save dataframe with real summary targets
+        Args:
+            dataframe (pd.DataFrame): Dataframe with only text (SEPARATE FROM SYNTHETIC DF) -> to have representative summary extracted
+            save_path (str): Path to save dataframe with real summary targets
+        
+        Returns:
+            None
         """
 
         if self.extract_sections is None:
@@ -476,6 +483,12 @@ class SummarizationTargetCreation(TextPreprocessor):
     def is_valid_parquet_file(self, path: str) -> bool:
         """
         Helper function to determine if filepath is a valid parquet file
+
+        Args:
+            path (str): path to parquet file
+        
+        Returns:
+            bool: True if valid parquet file lives at path
         """
         import fastparquet
         try:
@@ -485,6 +498,17 @@ class SummarizationTargetCreation(TextPreprocessor):
             return False
     
     def summarize_batch(self, texts: list[str], max_length = 256, min_length = 30) -> list[str]:
+        """
+        Provides a list of texts to the summarizing LLM and returns a decoded list of output summaries.
+
+        Args:
+            texts (list[str]): texts to summarize
+            max_length (int): max number of tokens to output
+            min_length (int): min number of tokens to output
+        
+        Returns:
+            list[str]: decoded target summaries
+        """
         inputs = self.tokenizer(
             texts,
             max_length=4096,
@@ -511,11 +535,14 @@ class SummarizationTargetCreation(TextPreprocessor):
         Takes training input and generates synthetic summaries using a pretrained medical LLM (checkpoint).
         Generates in chunks to limit chance of interruptions.
 
-        Parameters:
-        dataframe: Dataframe with only text (SEPARATE FROM REAL DF) -> to have summary generated
-        chunk_size (int): Number of rows processed at a time
-        save_path (str): Path where the summaries will be saved
-        resume (bool): If True, will skip rows with generated summaries
+        Args:
+            dataframe (pd.DataFrame): Dataframe with only text (SEPARATE FROM REAL DF) -> to have summary generated
+            chunk_size (int): Number of rows processed at a time
+            save_path (str): Path where the summaries will be saved
+            resume (bool): If True, will skip rows with generated summaries
+        
+        Returns:
+            None
         """
 
         if save_path is None:
@@ -573,8 +600,12 @@ class SummarizationTargetCreation(TextPreprocessor):
         Breaks data up to generate real and sythetic summaries.
         This preprocess method saves two separate parquet files, one for extracted "real" targets and one for synthetically-created targets
 
-        Parameters:
-        dataframe: to clean and prepare for summary generation
+        Args:
+            dataframe (pd.DataFrame): to clean and prepare for summary generation
+            save_dir (str): path to save the tokenizer configuration to
+        
+        Returns:
+            None
         """
         dataframe[self.text_col] = dataframe[self.text_col].apply(lambda x: self.remove_blank_sections(x))
         dataframe[self.text_col] = dataframe[self.text_col].apply(lambda x: self.normalize_deidentified_blanks(x))
@@ -593,9 +624,12 @@ class SummarizationTargetCreation(TextPreprocessor):
         Requires real and synthetic targets created and saved in applicable locations. Unites both datasets to finalize summary preprocessing in preparation for
         model training. Goal is to use an equal number of real and synthetic targets for training.
 
-        Parameters:
-        real_summary_dataset: Dataframe with real summary targets
-        synthetic_summary_dataset: Dataframe with synthetic summary targets
+        Args:
+            real_summary_dataset (pd.DataFrame): Dataframe with real summary targets
+            synthetic_summary_dataset (pd.DataFrame): Dataframe with synthetic summary targets
+        
+        Returns:
+            None
         """
 
         min_length = min(len(real_summary_dataset), len(synthetic_summary_dataset))
@@ -611,10 +645,10 @@ class IntentTargetingPreprocessor(TextPreprocessor):
     """
     Preprocessor for Intent Targeting. Goal to train model to predict whether intent for text is to summarize or ICD-10 code classify.
 
-    Extra Attributes:
-    intent_prompts: Series of correlated classification/summarization prompts to add to clinical notes.
-    label2id: encoding labels for each intent (saved for later use)
-    id2label: decoded labels relating to each intent (saved for later use)
+    Attributes:
+    intent_prompts (dict[str: list[str]]): Series of correlated classification/summarization prompts to add to clinical notes.
+    label2id (None): encoding labels for each intent (saved for later use)
+    id2label (None): decoded labels relating to each intent (saved for later use)
     """
 
     __slots__ = ["intent_prompts", "label2id", "id2label"]
@@ -649,11 +683,11 @@ class IntentTargetingPreprocessor(TextPreprocessor):
         Prepends a random intent prompt to the text based on intent. Intents initialized with the class.
         Part of subclass' preprocess function.
 
-        Parameters:
-        sample (str): Individual text with an associated intent.
+        Args:
+            sample (str): Individual text with an associated intent.
 
         Returns:
-        str: Same text with a random prompt prepended.
+            str: Same text with a random prompt prepended.
         """
         intent = sample["label"]
         prompts = self.intent_prompts.get(intent, [""])
@@ -665,11 +699,11 @@ class IntentTargetingPreprocessor(TextPreprocessor):
         Preprocess function to be mapped using dataset specific to intent classification.
         To be used with dataset.map() method.
 
-        Parameters:
-        batch (dict[list[str]]): batch from dataset
+        Args:
+            batch (dict[list[str]]): batch from dataset
 
         Returns:
-        Modified data in dataset. Text field tokenized based on tokenizer.
+            dict[str:list[int]]: Modified data in dataset. Text field tokenized based on tokenizer.
         """
 
         processed_texts = []
@@ -695,8 +729,12 @@ class IntentTargetingPreprocessor(TextPreprocessor):
         Then applies base preprocessing and prepends a correlating prompt based on intent.
         Tokenizes input and labels and saves dataset to "cleaned" directory.
 
-        Parameters:
-        dataframe: base data with clinical notes to preprocess for intent classification.
+        Args:
+            dataframe (pd.DataFrame): base data with clinical notes to preprocess for intent classification.
+            save_dir (str): save directory for tokenizer config
+        
+        Returns:
+            None
         """
 
         if self.text_col != "input":

@@ -23,12 +23,16 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
     Training method for fine-tuning a pre-trained encoder model on ICD-10 code
     classification task.
 
-    Parameters:
-    data_dir (str): path to dataset being used for training
-    label_dir (str): path to labels
-    checkpoint (str): pre-trained HuggingFace model used for training
-    save_dir (str): path to saved PEFT weights for specified task
-    test_data_dir (str): path to save test data to
+    Args:
+        data_dir (str): path to dataset being used for training
+        label_dir (str): path to labels
+        checkpoint (str): pre-trained HuggingFace model used for training
+        training_checkpoint_dir (str): directory to save in-training model config
+        save_dir (str): path to saved PEFT weights for specified task
+        test_data_dir (str): path to save test data to
+    
+    Returns:
+        None
     """
 
     dataset = load_from_disk(data_dir)
@@ -86,12 +90,13 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
             """
             Compute loss function that provides new loss function based on positive class weights.
 
-            Parameters:
-            model: classification training model
-            inputs: dictionary of the training inputs
-            return_outputs: controlled by HuggingFace Trainer class. False during training (only loss needed). True for evaluation/prediction.
+            Args:
+                model (AutoModel): classification training model
+                inputs (dict[str:Tensor]): dictionary of the training inputs
+                return_outputs (bool): controlled by HuggingFace Trainer class. False during training (only loss needed). True for evaluation/prediction.
 
-            Returns: tuple with the loss and model outputs or just the loss, depending on stage.
+            Returns: 
+                Tensor | (Tensor, SequenceClassifierOutput): tuple with the loss and model outputs or just the loss, depending on stage.
             """
             labels = inputs.get("labels")
             outputs = model(**inputs)
@@ -122,11 +127,15 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     """
     Training method for fine-tuning a pre-trained encoder-decoder model on clinical note summarization task.
 
-    Parameters:
-    data_dir (str): path to dataset being used for training
-    checkpoint (str): pre-trained HuggingFace model used for training
-    save_dir (str): path to saved PEFT weights for specified task
-    test_data_dir (str): path to save test data to
+    Args:
+        data_dir (str): path to dataset being used for training
+        checkpoint (str): pre-trained HuggingFace model used for training
+        training_checkpoint_dir (str): directory to save in-training model config
+        save_dir (str): path to saved PEFT weights for specified task
+        test_data_dir (str): path to save test data to
+
+    Returns:
+        None
     """
 
     dataset = load_from_disk(data_dir)
@@ -195,12 +204,11 @@ def compute_pos_weight(dataset: Dataset) -> Tensor:
     Function to calculate positive class weight for classification pipeline. Intended to help with class imbalance
     by increasing the penalty of positive labels.
 
-    Parameters:
-    dataset: HuggingFace dataset with a "labels" column
-    labels is expected to contain multi-hot vectors
+    Args:
+        dataset (Dataset): HuggingFace dataset with a "labels" columm. Labels are expected to contain multi-hot vectors
 
     Returns:
-    Tensor of positive class weight for each class
+        Tensor: tensor of positive class weight for each class
     """
     all_labels = np.array(dataset["labels"])
 
@@ -216,11 +224,14 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
     """
     Training pipeline for intent targeting (between classification and summarization for now).
 
-    Parameters:
-    data_dir (str): path to dataset being used for training
-    checkpoint (str): pre-trained HuggingFace model used for training
-    save_dir (str): path to saved PEFT weights for specified task
-    test_data_dir (str): path to save test data to
+    Args:
+        data_dir (str): path to dataset being used for training
+        checkpoint (str): pre-trained HuggingFace model used for training
+        save_dir (str): path to saved PEFT weights for specified task
+        training_checkpoint_dir (str): directory to save in-training model config
+    
+    Returns:
+        None
     """
 
     dataset = Dataset.load_from_disk(data_dir)

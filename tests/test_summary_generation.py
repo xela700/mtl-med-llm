@@ -11,6 +11,12 @@ import pandas as pd
 def test_generation() -> None:
     """
     Tests synthetic summary generation on a smaller amount of data to confirm effectiveness.
+
+    Args:
+        None
+    
+    Returns:
+        None
     """
 
     config = load_config()
@@ -30,6 +36,12 @@ def test_generation() -> None:
 def print_generation() -> None:
     """
     Prints created summaries for visual testing
+
+    Args:
+        None
+    
+    Returns:
+        None
     """
 
     summary_data = load_data("tests/test_data/synthetic_summaries")
@@ -42,6 +54,12 @@ def print_generation() -> None:
 def test_summary_content() -> None:
     """
     Prints components of completed summary dataset (prior to tokenization) for examination.
+
+    Args:
+        None
+    
+    Returns:
+        None
     """
 
     summary_data = load_data("data/cleaned_data/summarization_dataset.parquet")

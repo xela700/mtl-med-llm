@@ -12,6 +12,12 @@ config = load_config()
 def classification_metrics() -> None:
     """
     Pulls classification model training metrics and creates graphs for them. Graphs are saved to results/reporting/...
+
+    Args:
+        None
+    
+    Returns:
+        None
     """
 
     checkpoint_directory = "model/saved_model/ft-biobert-large-checkpoints/checkpoint-32991"
@@ -97,9 +103,15 @@ def classification_metrics() -> None:
     plt.show()
     plt.clf()
 
-def summarization_metrics():
+def summarization_metrics() -> None:
     """
     Pulls summarization model training metrics and creates graphs for them. Graphs are saved to results/reporting/...
+
+    Args:
+        None
+    
+    Returns:
+        None
     """
 
     checkpoint_directory = "model/saved_model/ft-biobart-large-checkpoints/checkpoint-4818"
@@ -133,6 +145,12 @@ def summarization_metrics():
 def intent_metrics() -> None:
     """
     Pulls intent-targeting model training metrics and creates graphs for them. Graphs are saved to results/reporting/...
+
+    Args:
+        None
+    
+    Returns:
+        None
     """
 
     checkpoint_directory = "model/saved_model/ft-distilbert-base-checkpoints/checkpoint-90"

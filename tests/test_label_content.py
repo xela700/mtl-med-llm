@@ -2,7 +2,16 @@ from utils.config_loader import load_config
 from datasets import load_from_disk
 from data.fetch_data import load_data
 
-def check_labels():
+def check_labels() -> None:
+    """
+    Test to check label attributes
+
+    Args:
+        None
+    
+    Returns:
+        None
+    """
     config = load_config()
     labels = config["data"]["task_2"]["data_path"]
     label_data = load_data(labels)

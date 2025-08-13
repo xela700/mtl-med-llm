@@ -19,13 +19,16 @@ def fetch_and_save_query(query: str, save_path: str = None) -> None:
     Creates a save path if none exists/provided. Uses input query to pull from BigQuery.
     Data saved to parquet file in save path.
 
-    Parameters:
-    query (str): a SQL query
-    save_path (str): optional path to save return from query to
+    Args:
+        query (str): a SQL query
+        save_path (str): optional path to save return from query to
+
+    Returns:
+        None
 
     Raises:
-    FileNotFoundError: if the provided path is not valid
-    ValueError: if the provided query cannot be used by BigQuery
+        FileNotFoundError: if the provided path is not valid
+        ValueError: if the provided query cannot be used by BigQuery
     """
 
     project_id = 'fine-tuned-med-llm' # Google Cloud project connected to LLM construction
@@ -60,12 +63,12 @@ def validate_query(query: str, client: bigquery.Client) -> bool:
     SQL syntax by performing a dry run before executing proper.
     Will return True if the query is valid.
 
-    Parameters:
-    query (str): a SQL query
-    bigquery.Client: client connection to Google BigQuery
+    Args:
+        query (str): a SQL query
+        client (bigquery.Client): client connection to Google BigQuery
 
     Returns:
-    bool: whether BigQuery recognizes the query as valid
+        bool: whether BigQuery recognizes the query as valid
     """
     job_config = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
 
@@ -82,15 +85,15 @@ def load_data(load_path: str = None) -> pd.DataFrame:
     Loads data from parquet file. Uses config laid out in YAML if no
     path provided.
 
-    Parameters:
-    load_path (str): Option path to parquet file
+    Args:
+        load_path (str): Option path to parquet file
 
     Returns:
-    pd.DataFrame: dataframe from parquet file
+        pd.DataFrame: dataframe from parquet file
 
     Raises:
-    FileNotFoundError: if file doesn't exist
-    ValueError: If file is not a valid parquet file
+        FileNotFoundError: if file doesn't exist
+        ValueError: If file is not a valid parquet file
     """
     
     if load_path is None:

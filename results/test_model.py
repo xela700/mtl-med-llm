@@ -19,8 +19,11 @@ def classification_model_testing(test_data_path: str) -> None:
     """
     Evaluates BioBERT PEFT fine-tuned model using saved test data.
 
-    Parameters:
-    test_data_path (str): Path to the saved test data.
+    Args:
+        test_data_path (str): Path to the saved test data.
+    
+    Returns:
+        None
     """
 
     if not os.path.exists(test_data_path):
@@ -56,8 +59,11 @@ def summarization_model_testing(test_data_path: str) -> None:
     """
     Evaluates BioBART PEFT fine-tuned model using saved test data.
 
-    Parameters:
-    test_data_path (str): Path to the saved test data.
+    Args:
+        test_data_path (str): Path to the saved test data.
+    
+    Returns:
+        None
     """
 
     if not os.path.exists(test_data_path):

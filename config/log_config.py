@@ -5,6 +5,15 @@ Configuration for logging for all modules.
 import logging
 
 def logging_setup(level : int = logging.INFO) -> None:
+    """
+    Logging configuration setup.
+
+    Args:
+        level (int): level of logging (default info)
+    
+    Returns:
+        None
+    """
     logging.basicConfig(
         level=level,
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",

@@ -1,3 +1,0 @@
-LLM Classification Evaluation on Testing Data
-
-{'eval_loss': 0.39291176199913025, 'eval_model_preparation_time': 0.0128, 'eval_accuracy': 0.0, 'eval_f1_micro': 0.022511382563123863, 'eval_f1_macro': 0.016286032847625153, 'eval_precision_micro': 0.011440545969149177, 'eval_recall_micro': 0.6966079962699615, 'eval_hamming_loss': 0.16989828136508717, 'eval_roc_auc_micro': 0.7635428381410079, 'eval_roc_auc_macro': nan, 'eval_runtime': 17950.1108, 'eval_samples_per_second': 1.361, 'eval_steps_per_second': 0.17}

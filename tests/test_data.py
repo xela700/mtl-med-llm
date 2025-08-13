@@ -6,7 +6,16 @@ from data.fetch_data import load_data
 from datasets import load_from_disk
 from utils.config_loader import load_config
 
-def examine_classification_data():
+def examine_classification_data() -> None:
+    """
+    Testing to look at length of classification dataset
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     config = load_config()
     task_1_data = config["data"]["task_1"]["data_path"]
 
@@ -19,6 +28,15 @@ def examine_classification_data():
     print("Total classification dataset length:", len(classification_data_tokenized))
 
 def examine_summarization_data():
+    """
+    Testing to look at length of summarization dataset, including number of real and synthetic summaries.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     config = load_config()
     task_3_data = config["data"]["task_3"]["data_path"]
 

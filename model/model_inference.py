@@ -19,11 +19,11 @@ def classification_prediction(text: str) -> list[str]:
     Takes clinical note input and makes predictions of possible ICD-10 code labels using
     fine-tuned classification LLM.
 
-    Parameters:
-    text (str): Text to classify
+    Args:
+        text (str): Text to classify
 
     Returns:
-    list[str] -> predicted ICD-10 codes in list format
+        list[str]: predicted ICD-10 codes in list format
     """
 
     peft_model_path = config["model"]["classification_model"]
@@ -52,11 +52,11 @@ def summarization_prediction(text: str) -> str:
     """
     Takes clinical note input and returns a summary using the fine-tune summarization LLM.
 
-    Parameters:
-    text (str): Clinical note text to summarize
+    Args:
+        text (str): Clinical note text to summarize
 
     Returns:
-    str -> Summary of clinical note
+        str: Summary of clinical note
     """
 
     peft_model_path = config["model"]["summarization_model"]
@@ -73,11 +73,11 @@ def intent_prediction(text: str) -> str:
     """
     Takes clinical note w/ intent for either classification or summarization and predicts intent.
 
-    Parameters:
-    text (str): Clinical note to infer intent.
+    Args:
+        text (str): Clinical note to infer intent.
 
     Returns:
-    str: Intent label (classification or summarization currently)
+        str: Intent label (classification or summarization currently)
     """
 
     model_path = config["model"]["intent_model"]
@@ -106,9 +106,11 @@ def model_routing_pipeline(texts: list[str]) -> None:
     Takes text or list of texts through pipeline.
     Intent prediction -> either classification or summarization -> output
 
-    Parameters:
-    texts list[str]: text(s) to feed into pipeline and return either associated ICD-10 codes (classification) or
-    a summary of the clinical note (summarization).
+    Args:
+        texts list[str]: text(s) to feed into pipeline and return either associated ICD-10 codes (classification) or a summary of the clinical note (summarization).
+    
+    Returns:
+        None
     """
 
     if isinstance(texts, str):

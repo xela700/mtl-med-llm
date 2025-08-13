@@ -10,6 +10,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 def classification_compute_metric(eval_preds):
+    """
+    Method for use in model training to evaluation performance. Includes accuracy, F1 (micro & macro), precision, recall, hamming loss and ROC-AUC (micro & macro)
+
+    Args:
+        eval_preds (transformers.EvalPrediction): logits and labels for computing metrics
+    
+    Returns:
+        dict[str:float]: metrics based on evaluations
+    """
     logits, labels = eval_preds
 
     probs = torch.sigmoid(torch.tensor(logits)).numpy()
@@ -43,6 +52,15 @@ class SummarizationMetrics:
         self.bertscore = load("bertscore")
 
     def __call__(self, eval_preds):
+        """
+        Method for use in model training to evaluation performance. Includes ROUGE-L and BERT Score F1.
+
+        Args:
+            eval_preds (transformers.EvalPrediction): logits and labels for computing metrics
+    
+        Returns:
+            dict[str:float]: metrics based on evaluations
+        """
         predictions, labels = eval_preds
         labels = np.where(labels == -100, self.tokenizer.pad_token_id, labels)
 
@@ -62,6 +80,15 @@ class SummarizationMetrics:
 
 
 def intent_compute_metrics(eva_pred):
+    """
+    Method for use in model training to evaluation performance. Includes accuracy.
+
+    Args:
+        eval_preds (transformers.EvalPrediction): logits and labels for computing metrics
+    
+    Returns:
+        dict[str:float]: metrics based on evaluations
+    """
     accuracy = load("accuracy")
 
     logits, labels = eva_pred

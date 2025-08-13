@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 def test_classification_input() -> None:
     """
     Test function to test integration of data fetching with preprocessing pipeline. Checks are made from print outputs.
+
+    Args:
+        None
+    
+    Returns:
+        None
     """
 
     query_text = """
