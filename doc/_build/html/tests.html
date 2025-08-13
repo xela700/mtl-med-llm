@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>tests package &#8212; Multi-model Biomedical LLM  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="tests-package">
+<h1>tests package<a class="headerlink" href="#tests-package" title="Link to this heading">¶</a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
+</section>
+<section id="module-tests.test_cuda">
+<span id="tests-test-cuda-module"></span><h2>tests.test_cuda module<a class="headerlink" href="#module-tests.test_cuda" title="Link to this heading">¶</a></h2>
+<p>Simple test script to check if CUDA is available for generating text and training models</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_cuda.test_cuda">
+<span class="sig-prename descclassname"><span class="pre">tests.test_cuda.</span></span><span class="sig-name descname"><span class="pre">test_cuda</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tests.test_cuda.test_cuda" title="Link to this definition">¶</a></dt>
+<dd><p>Check to see if CUDA available on system</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-tests.test_data">
+<span id="tests-test-data-module"></span><h2>tests.test_data module<a class="headerlink" href="#module-tests.test_data" title="Link to this heading">¶</a></h2>
+<p>A simple module for examining datasets from MIMIC-IV</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_data.examine_classification_data">
+<span class="sig-prename descclassname"><span class="pre">tests.test_data.</span></span><span class="sig-name descname"><span class="pre">examine_classification_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tests.test_data.examine_classification_data" title="Link to this definition">¶</a></dt>
+<dd><p>Testing to look at length of classification dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_data.examine_summarization_data">
+<span class="sig-prename descclassname"><span class="pre">tests.test_data.</span></span><span class="sig-name descname"><span class="pre">examine_summarization_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_data.examine_summarization_data" title="Link to this definition">¶</a></dt>
+<dd><p>Testing to look at length of summarization dataset, including number of real and synthetic summaries.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-tests.test_fetch_data">
+<span id="tests-test-fetch-data-module"></span><h2>tests.test_fetch_data module<a class="headerlink" href="#module-tests.test_fetch_data" title="Link to this heading">¶</a></h2>
+<p>Module to test functions that fetch and load data from BigQuery</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_fetch_and_save_query_bad_path">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_fetch_and_save_query_bad_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_fetch_and_save_query_bad_path" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_fetch_and_save_query_bad_query">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_fetch_and_save_query_bad_query</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_fetch_and_save_query_bad_query" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_fetch_and_save_query_valid">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_fetch_and_save_query_valid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_fetch_and_save_query_valid" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_load_data_bad_path">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_load_data_bad_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_load_data_bad_path" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_load_data_valid">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_load_data_valid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_load_data_valid" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_load_data_wrong_ftype">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_load_data_wrong_ftype</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_load_data_wrong_ftype" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_validate_query_invalid">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_validate_query_invalid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_validate_query_invalid" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_fetch_data.test_validate_query_valid">
+<span class="sig-prename descclassname"><span class="pre">tests.test_fetch_data.</span></span><span class="sig-name descname"><span class="pre">test_validate_query_valid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_fetch_data.test_validate_query_valid" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-tests.test_integration">
+<span id="tests-test-integration-module"></span><h2>tests.test_integration module<a class="headerlink" href="#module-tests.test_integration" title="Link to this heading">¶</a></h2>
+<p>Testing module for both fetching and preprocessing data, to ensure proper outputs are being achieved.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_integration.test_classification_input">
+<span class="sig-prename descclassname"><span class="pre">tests.test_integration.</span></span><span class="sig-name descname"><span class="pre">test_classification_input</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tests.test_integration.test_classification_input" title="Link to this definition">¶</a></dt>
+<dd><p>Test function to test integration of data fetching with preprocessing pipeline. Checks are made from print outputs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-tests.test_label_content">
+<span id="tests-test-label-content-module"></span><h2>tests.test_label_content module<a class="headerlink" href="#module-tests.test_label_content" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_label_content.check_labels">
+<span class="sig-prename descclassname"><span class="pre">tests.test_label_content.</span></span><span class="sig-name descname"><span class="pre">check_labels</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tests.test_label_content.check_labels" title="Link to this definition">¶</a></dt>
+<dd><p>Test to check label attributes</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-tests.test_preprocessing_data">
+<span id="tests-test-preprocessing-data-module"></span><h2>tests.test_preprocessing_data module<a class="headerlink" href="#module-tests.test_preprocessing_data" title="Link to this heading">¶</a></h2>
+<p>Module to test functions that preprocess data prior to model training</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_preprocessing_data.test_classification_extraction_custom_sections">
+<span class="sig-prename descclassname"><span class="pre">tests.test_preprocessing_data.</span></span><span class="sig-name descname"><span class="pre">test_classification_extraction_custom_sections</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_preprocessing_data.test_classification_extraction_custom_sections" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_preprocessing_data.test_classification_extraction_default_sections">
+<span class="sig-prename descclassname"><span class="pre">tests.test_preprocessing_data.</span></span><span class="sig-name descname"><span class="pre">test_classification_extraction_default_sections</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_preprocessing_data.test_classification_extraction_default_sections" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_preprocessing_data.test_normalize_deidentified_blanks">
+<span class="sig-prename descclassname"><span class="pre">tests.test_preprocessing_data.</span></span><span class="sig-name descname"><span class="pre">test_normalize_deidentified_blanks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_preprocessing_data.test_normalize_deidentified_blanks" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_preprocessing_data.test_normalize_deidentified_blanks_unknown_fields">
+<span class="sig-prename descclassname"><span class="pre">tests.test_preprocessing_data.</span></span><span class="sig-name descname"><span class="pre">test_normalize_deidentified_blanks_unknown_fields</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_preprocessing_data.test_normalize_deidentified_blanks_unknown_fields" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_preprocessing_data.test_remove_blank_sections_custom_headers">
+<span class="sig-prename descclassname"><span class="pre">tests.test_preprocessing_data.</span></span><span class="sig-name descname"><span class="pre">test_remove_blank_sections_custom_headers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_preprocessing_data.test_remove_blank_sections_custom_headers" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_preprocessing_data.test_remove_blank_sections_default_headers">
+<span class="sig-prename descclassname"><span class="pre">tests.test_preprocessing_data.</span></span><span class="sig-name descname"><span class="pre">test_remove_blank_sections_default_headers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_preprocessing_data.test_remove_blank_sections_default_headers" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_preprocessing_data.test_remove_normalize_blanks_process">
+<span class="sig-prename descclassname"><span class="pre">tests.test_preprocessing_data.</span></span><span class="sig-name descname"><span class="pre">test_remove_normalize_blanks_process</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_preprocessing_data.test_remove_normalize_blanks_process" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-tests.test_summary_generation">
+<span id="tests-test-summary-generation-module"></span><h2>tests.test_summary_generation module<a class="headerlink" href="#module-tests.test_summary_generation" title="Link to this heading">¶</a></h2>
+<p>Script to test summary generation on smaller dataset</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_summary_generation.print_generation">
+<span class="sig-prename descclassname"><span class="pre">tests.test_summary_generation.</span></span><span class="sig-name descname"><span class="pre">print_generation</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tests.test_summary_generation.print_generation" title="Link to this definition">¶</a></dt>
+<dd><p>Prints created summaries for visual testing</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_summary_generation.test_generation">
+<span class="sig-prename descclassname"><span class="pre">tests.test_summary_generation.</span></span><span class="sig-name descname"><span class="pre">test_generation</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tests.test_summary_generation.test_generation" title="Link to this definition">¶</a></dt>
+<dd><p>Tests synthetic summary generation on a smaller amount of data to confirm effectiveness.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tests.test_summary_generation.test_summary_content">
+<span class="sig-prename descclassname"><span class="pre">tests.test_summary_generation.</span></span><span class="sig-name descname"><span class="pre">test_summary_content</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tests.test_summary_generation.test_summary_content" title="Link to this definition">¶</a></dt>
+<dd><p>Prints components of completed summary dataset (prior to tokenization) for examination.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-tests">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-tests" title="Link to this heading">¶</a></h2>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Multi-model Biomedical LLM</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Alexander Nicholson.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/tests.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

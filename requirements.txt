@@ -3,7 +3,9 @@ accelerate==1.9.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.12.13
 aiosignal==1.4.0
+alabaster==1.0.0
 attrs==25.3.0
+babel==2.17.0
 bert-score==0.3.13
 cachetools==5.5.2
 certifi==2025.6.15
@@ -16,6 +18,7 @@ cycler==0.12.1
 datasets==3.6.0
 db-dtypes==1.4.3
 dill==0.3.8
+docutils==0.21.2
 evaluate==0.4.5
 fastparquet==2024.11.0
 filelock==3.18.0
@@ -35,6 +38,7 @@ grpcio-status==1.73.0
 hf-xet==1.1.5
 huggingface-hub==0.33.2
 idna==3.10
+imagesize==1.4.1
 iniconfig==2.1.0
 Jinja2==3.1.6
 joblib==1.5.1
@@ -67,12 +71,21 @@ pytz==2025.2
 PyYAML==6.0.2
 regex==2024.11.6
 requests==2.32.4
+roman-numerals-py==3.1.0
 rouge_score==0.1.2
 rsa==4.9.1
 safetensors==0.5.3
 scikit-learn==1.7.0
 scipy==1.15.3
 six==1.17.0
+snowballstemmer==3.0.1
+Sphinx==8.2.3
+sphinxcontrib-applehelp==2.0.0
+sphinxcontrib-devhelp==2.0.0
+sphinxcontrib-htmlhelp==2.1.0
+sphinxcontrib-jsmath==1.0.1
+sphinxcontrib-qthelp==2.0.0
+sphinxcontrib-serializinghtml==2.0.0
 sympy==1.14.0
 threadpoolctl==3.6.0
 tokenizers==0.21.2
