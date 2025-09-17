@@ -314,6 +314,94 @@ class ClassificationPreprocessor(TextPreprocessor):
             self.tokenizer.save_pretrained(save_directory=save_dir)
     
         
+class CodePreprocessor(TextPreprocessor):
+    """
+    Preprocessor for ICD-10 code descriptions for use with encoder model as a component of classification.
+
+    Attributes:
+        label_ids (dict[str:int]): Separate label-specific query. Current plan to use initial dataset and group by
+        ICD-10 codes. Only training on most frequent 2k - 5k codes (out of 70k) to reduce chance of no relevant
+        samples.
+        label_col (str): column with ICD codes
+    """
+
+    __slots__ = ("label_ids", "label_col")
+
+    def __init__(self, checkpoint: str, cleaned_path: str, label_ids: dict[str:int], text_col: str, label_col: str, remove_sections:list[str]=None):
+        super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
+        self.label_ids = label_ids
+        self.label_col = label_col
+    
+    def filter_text_by_label(self, batch: dict[str, list[str]]) -> list[bool]:
+        """
+        Filtering method to check for the presence of one (or more) ICD labels that are being used during
+        training. To be used with dataset.filter() method
+
+        Args:
+            batch (dict[str:list[str]]): dataset batch being provided to check for label presence
+
+        Returns:
+            list[bool]: true if at least one label is present. filtered represents booleans that determine whether
+            a note stays or gets dropped. 
+        """
+        filtered = []
+        for icd_codes in batch.get("labels", []):
+            keep = any(code in self.label_ids for code in icd_codes)
+            filtered.append(keep)
+        return filtered
+    
+    def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
+        """
+        Preprocess function to be mapped using dataset specific to code data as part of classification task.
+        To be used with dataset.map() method.
+
+        Args:
+            batch (dict[list[str]]): batch from dataset
+
+        Returns:
+            dict[str:list[int]]: Modified data in dataset. Text tokenized based on tokenizer.
+        """
+
+        codes = batch[self.label_col]
+        descriptions = batch[self.text_col]
+
+        processed_texts = [f"{code}: {desc}" for code, desc in zip(codes, descriptions)]
+
+        tokenized_data = self.tokenizer(processed_texts, truncation=True, max_length=512, return_tensors=None)
+
+        return tokenized_data
+    
+    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
+        """
+        Full preprocess steps for code encorder as part of classification.
+        Converts dataframe to a dataset. Filters samples without any applicable training labels.
+        Maps preprocess function. Finally, saves dataset to disk for reuse.
+
+        Args:
+            dataframe (pd.DataFrame): full dataframe for classification preprocessing
+        
+        Returns:
+            None
+        """
+        dataset = Dataset.from_pandas(dataframe)
+
+        dataset = dataset.filter(self.filter_text_by_label, batched=True)
+        dataset = dataset.map(self.preprocess_function, batched=True)
+
+        if os.path.exists(self.cleaned_path):
+            logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
+        
+        clean_path = Path(self.cleaned_path)
+
+        # Deletes old dataset to prevent conflits
+        if os.path.exists(clean_path):
+            logger.info(f"Deleting old dataset at {clean_path}")
+            shutil.rmtree(path=clean_path)
+
+        dataset.save_to_disk(str(clean_path))
+
+        if save_dir:
+            self.tokenizer.save_pretrained(save_directory=save_dir)
 
 
 
