@@ -42,6 +42,11 @@ data:
     data_path: data/raw_data/intent_data.parquet
     tokenized_path: data/cleaned_data/intent_dataset_tokenized
   
+  task_5:
+    description: "Data related to code encoder for classification task. Contains 'code: description' style data."
+    data_path: data/raw_data/icd10cm_codes_2026.txt
+    tokenized_path: data/clean_path/code_dataset_tokenized
+  
   classification_test_data: data/test_data/classification_test_data
   summarization_test_data: data/test_data/summarization_test_data
 

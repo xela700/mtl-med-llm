@@ -26,6 +26,7 @@ tests/test_data
 *.parquet
 *.csv
 *.arrow
+*.txt
 
 # --- Logs ---
 *.log
