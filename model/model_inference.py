@@ -34,19 +34,21 @@ def classification_prediction(text: str) -> list[str]:
     inputs = tokenizer(text, return_tensor="pt").to(model.device)
     outputs = model(**inputs)
 
-    logits = outputs.logits
-    probs = F.sigmoid(logits)
+    with torch.no_grad():
+        logits = outputs.logits
+    probs = torch.sigmoid(logits)
 
-    predicted_labels = (probs > 0.5).int()
+    threshold = 0.5 # modifiable prediction threshold
 
-    label_data_path = config["data"]["task_2"]["data_path"] # path to full list of labels in str form
-    label_data = load_data(label_data_path)
-    labels = label_data["icd_code"].tolist() # Need to move saving the label list to part of preprocessing (json file)
+    predicted_ids = (probs > threshold).nonzero(as_tuple=True)[1].tolist()
 
-    predictions = predicted_labels[0].tolist()
-    predicted_classes = [labels[i] for i, val in enumerate(predictions) if val == 1]
+    # label_data_path = config["data"]["task_2"]["data_path"] # path to full list of labels in str form
+    # label_data = load_data(label_data_path)
+    # labels = label_data["icd_code"].tolist() # Need to move saving the label list to part of preprocessing (json file)
 
-    return predicted_classes
+    predicted_labels = [model.config.id2label[i] for i in predicted_ids]
+
+    return predicted_labels
 
 def summarization_prediction(text: str) -> str:
     """
