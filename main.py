@@ -12,11 +12,14 @@ import argparse
 import pandas as pd
 import os
 import json
+import logging
 from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
-from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor
+from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor, CodePreprocessor
 from model.train_model import classification_model_training, summarization_model_training, intent_model_training
+
+logger = logging.getLogger(__name__)
 
 def main(args: list[str]) -> None:
     config = load_config()
@@ -33,7 +36,7 @@ def main(args: list[str]) -> None:
 
     
     elif args.command == "preprocess":
-        if args.target == "classification":
+        if args.target == "classification_base":
             base_data = load_data(config["data"]["task_1"]["data_path"])
             label_data = load_data(config["data"]["task_2"]["temp_data_path"]) # Modifying this for initial training. Uses only 50 ICD-10 codes.
             label_map_path = config["data"]["task_2"]["label_map_path"]
@@ -57,6 +60,30 @@ def main(args: list[str]) -> None:
             model_save_dir = config["model"]["classification_model"]
 
             preprocessor.preprocess(base_data)
+        
+        elif args.target == "classification_code":
+            base_data = pd.read_csv(config["data"]["task_5"]["data_path"], header=None, sep='\t')
+            clean_path = config["data"]["task_5"]["tokenized_path"]
+            label_map_path = config["data"]["task_2"]["label_map_path"]
+            checkpoint = config["model"]["classification_checkpoint"]
+            try:
+                with open(label_map_path) as f:
+                    mappings = json.load(f)
+            except FileNotFoundError:
+                logger.error("Label mappings do not yet exist. Preprocess base classification data first")
+            
+            label_ids = mappings["label2id"]
+            
+            preprocessor = CodePreprocessor(
+                checkpoint=checkpoint,
+                cleaned_path=clean_path,
+                label_ids=label_ids,
+                text_col=1,
+                label_col=0
+            )
+
+            preprocessor.preprocess(base_data)
+
         
         elif args.target == "summary_generation": # Must be done before command "generation"
             base_data = load_data(config["data"]["task_3"]["data_path"])
