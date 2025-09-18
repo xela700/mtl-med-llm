@@ -11,6 +11,7 @@ transformers.logging.set_verbosity_error()
 import argparse
 import pandas as pd
 import os
+import json
 from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
@@ -35,12 +36,19 @@ def main(args: list[str]) -> None:
         if args.target == "classification":
             base_data = load_data(config["data"]["task_1"]["data_path"])
             label_data = load_data(config["data"]["task_2"]["temp_data_path"]) # Modifying this for initial training. Uses only 50 ICD-10 codes.
-            label_ids = {code: i for i, code in enumerate(sorted(label_data["icd_code"].unique()))}
+            label_map_path = config["data"]["task_2"]["label_map_path"]
+            labels = sorted(label_data["icd_code"].unique())
+            label2id = {label: i for i, label in enumerate(labels)}
+            id2label = {i: label for i, label in enumerate(labels)}
             checkpoint = config["model"]["classification_checkpoint"]
+
+            # For use in training to set up config
+            with open(label_map_path, "w") as f:
+                json.dump({"label2id": label2id, "id2label": id2label})
 
             preprocessor = ClassificationPreprocessor(
                 checkpoint=checkpoint, 
-                label_ids=label_ids, 
+                label_ids=label2id, 
                 text_col="discharge_note", 
                 label_col="icd_codes", 
                 cleaned_path=config["data"]["task_1"]["tokenized_path"]
@@ -180,7 +188,7 @@ def main(args: list[str]) -> None:
     elif args.command == "training":
         if args.target == "classification":
             tokenized_data_dir = config["data"]["task_1"]["tokenized_path"]
-            label_dir = config["data"]["task_2"]["data_path"]
+            label_dir = config["data"]["task_2"]["temp_data_path"] # modified to use fewer labels for initial training.
             checkpoint = config["model"]["classification_checkpoint"]
             model_weights_dir = config["model"]["classification_model"]
             training_checkpoints = config["model"]["classification_training_checkpoints"]

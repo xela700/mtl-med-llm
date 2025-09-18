@@ -13,19 +13,22 @@ from model.evaluate_model import classification_compute_metric, SummarizationMet
 import torch
 import numpy as np
 import json
+import logging
 from torch import Tensor
 from torch.utils.data import DataLoader
 from datasets import Dataset
 from typing import Union, Dict, Tuple
 
-def classification_model_training(data_dir: str, label_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
+logger = logging.getLogger(__name__)
+
+def classification_model_training(data_dir: str, label_mapping_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
     """
     Training method for fine-tuning a pre-trained encoder model on ICD-10 code
     classification task.
 
     Args:
         data_dir (str): path to dataset being used for training
-        label_dir (str): path to labels
+        label_map_dir (str): path to label mapping (id2label and label2id)
         checkpoint (str): pre-trained HuggingFace model used for training
         training_checkpoint_dir (str): directory to save in-training model config
         save_dir (str): path to saved PEFT weights for specified task
@@ -45,10 +48,20 @@ def classification_model_training(data_dir: str, label_dir: str, checkpoint: str
 
     test_dataset.save_to_disk(test_data_dir)
 
-    num_labels = len(load_data(label_dir))
+    try:
+        with open(label_mapping_dir) as f:
+            mappings = json.load(f)
+    except FileNotFoundError:
+        logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
+
+    label2id = mappings["label2id"]
+    id2label = {int(k): v for k, v in mappings["id2label"].items()}
+    num_labels = len(label2id)
 
     config = AutoConfig.from_pretrained(checkpoint)
     config.num_labels = num_labels
+    config.label2id = label2id
+    config.id2label = id2label
     config.problem_type = "multi_label_classification"
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
