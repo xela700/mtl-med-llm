@@ -12,7 +12,7 @@ Temp data size: 50 ICD-10 codes
 import logging
 import pandas as pd
 from utils.config_loader import load_config
-from fetch_data import load_data
+from data.fetch_data import load_data
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def check_num_codes(dataframe: pd.DataFrame) -> int:
 
     return dataframe.nunique(dropna=False).iloc[0]
 
-def main(args: list[str]) -> None:
+def main() -> None:
     """
     Main function for data modification. Loads full classification label data from config file, checks its number of codes,
     modifies the number of codes, checks the number of codes again, and saves the new temp labels for preprocessing use.
@@ -63,11 +63,11 @@ def main(args: list[str]) -> None:
 
     config = load_config()
     label_data = load_data(config["data"]["task_2"]["data_path"])
-    temp_data_path = "data/raw_data/temp_code_freq_data.parquet"
+    temp_data_path = config["data"]["task_2"]["temp_data_path"]
 
     print(check_num_codes(label_data))
 
-    temp_labels = create_temp_classification_labels(label_data)
+    temp_labels = create_temp_classification_labels(label_data, 50)
 
     print(check_num_codes(temp_labels))
 

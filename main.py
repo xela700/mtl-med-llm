@@ -34,7 +34,7 @@ def main(args: list[str]) -> None:
     elif args.command == "preprocess":
         if args.target == "classification":
             base_data = load_data(config["data"]["task_1"]["data_path"])
-            label_data = load_data(config["data"]["task_2"]["data_path"])
+            label_data = load_data(config["data"]["task_2"]["temp_data_path"]) # Modifying this for initial training. Uses only 50 ICD-10 codes.
             label_ids = {code: i for i, code in enumerate(sorted(label_data["icd_code"].unique()))}
             checkpoint = config["model"]["classification_checkpoint"]
 

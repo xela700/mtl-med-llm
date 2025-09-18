@@ -21,6 +21,7 @@ data:
       ORDER BY count DESC
       LIMIT 5000
     data_path: data/raw_data/code_freq_data.parquet
+    temp_data_path: data/raw_data/temp_code_freq_data.parquet
   
   task_3:
     description: "Fetch ~10,000 random discharge notes for summarization. Cleaned data should have base preprocessing, along extracted real/synthetic summaries and associated tags."
