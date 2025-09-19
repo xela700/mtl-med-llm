@@ -10,6 +10,7 @@ data:
       GROUP BY h.subject_id, h.hadm_id, n.text
     data_path: data/raw_data/classification_data.parquet
     tokenized_path: data/cleaned_data/classification_dataset
+    temp_tokenized_path: data/cleaned_data/temp_classification_dataset
   
   task_2:
     description: "Fetch top 5,000 ICD codes for classification. This query does not require preprocessing, as it is used to filter query from task_1 only"

@@ -22,7 +22,7 @@ def examine_classification_data() -> None:
     classification_data = load_data(task_1_data)
     print("Number of pulled records for classification", len(classification_data))
 
-    task_1_tokenized = config["data"]["task_1"]["tokenized_path"]
+    task_1_tokenized = config["data"]["task_1"]["temp_tokenized_path"]
     classification_data_tokenized = load_from_disk(task_1_tokenized)
 
     print("Total classification dataset length:", len(classification_data_tokenized))
@@ -60,5 +60,5 @@ def examine_summarization_data():
     print("Total for summary:", len(combined))
 
 if __name__ == "__main__":
-    # examine_classification_data()
-    examine_summarization_data()
+    examine_classification_data()
+    # examine_summarization_data()

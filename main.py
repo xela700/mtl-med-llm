@@ -47,14 +47,14 @@ def main(args: list[str]) -> None:
 
             # For use in training to set up config
             with open(label_map_path, "w") as f:
-                json.dump({"label2id": label2id, "id2label": id2label})
+                json.dump({"label2id": label2id, "id2label": id2label}, f)
 
             preprocessor = ClassificationPreprocessor(
                 checkpoint=checkpoint, 
                 label_ids=label2id, 
                 text_col="discharge_note", 
                 label_col="icd_codes", 
-                cleaned_path=config["data"]["task_1"]["tokenized_path"]
+                cleaned_path=config["data"]["task_1"]["temp_tokenized_path"] # Modifying this for initial training. Uses only 50 ICD-10 codes.
                 )
 
             model_save_dir = config["model"]["classification_model"]
@@ -273,7 +273,7 @@ if __name__ == "__main__":
     generation_parser.add_argument("target", choices=["real", "synthetic", "synthetic_continue", "combine"], help="Specify target creation for summary task. Combine unites both types of targets into one dataset.")
 
     preprocess_parser = subparsers.add_parser("preprocess")
-    preprocess_parser.add_argument("target", choices=["classification", "summary_generation", "summarization", "intent_targeting"], help="Specify which preprocess pipeline(s) to initiate")
+    preprocess_parser.add_argument("target", choices=["classification_base", "classification_code", "summary_generation", "summarization", "intent_targeting"], help="Specify which preprocess pipeline(s) to initiate")
 
     training_parser = subparsers.add_parser("training")
     training_parser.add_argument("target", choices=["classification", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")

@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 from transformers import AutoTokenizer, pipeline, AutoModelForSeq2SeqLM
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from sklearn.preprocessing import LabelEncoder
+from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 
 
 logger = logging.getLogger(__name__)
@@ -273,6 +274,65 @@ class ClassificationPreprocessor(TextPreprocessor):
             keep = any(code in self.label_ids for code in icd_codes)
             filtered.append(keep)
         return filtered
+    
+    def iterative_sampling(self, dataframe: pd.DataFrame, target_size: int=10000, min_inactive: int=50, random_state: int=42) -> pd.DataFrame:
+        """
+        Performs iterative sampling on multi-label classification dataset to sample it down from full dataset to a more manageable size.
+
+        Args:
+            dataframe (pd.DataFrame): dataframe to sample down
+            target_size (int): target size of the final dataset
+            min_inactive (int): the minimum amount of samples with inactive labels (codes)
+            random_state (int): seed determination for random sampling
+        
+        Returns:
+            pd.DataFrame: dataframe after sampling
+        """
+
+        # Label vocabulary
+        all_labels = sorted({label for labels in dataframe[self.label_col] for label in labels})
+        active_labels = list(self.label_ids.keys())
+        active_set = set(active_labels)
+        inactive_set = set(all_labels) - active_set
+
+        # Matrix for labels being trained on
+        label_to_index = {l: i for i, l in enumerate(active_labels)}
+        y_active = np.zeros((len(dataframe), len(active_labels)), dtype=int)
+        for i, labels in enumerate(dataframe[self.label_col]):
+            for l in labels:
+                if l in active_set:
+                    y_active[i, label_to_index[l]] = 1
+        
+        # Collecting indices to ensure some inactive labels remain
+        guaranteed_indices = set()
+        if inactive_set:
+            for l in inactive_set:
+                indices = [i for i, labels in enumerate(dataframe[self.label_col]) if l in labels]
+                if indices:
+                    np.random.seed(random_state)
+                    chosen = np.random.choice(indices, size=min(min_inactive, len(indices)), replace=False)
+                    guaranteed_indices.update(chosen)
+        
+        # Iterative stratification
+        remaining_target_size = target_size - len(guaranteed_indices)
+        if remaining_target_size <= 0:
+            logger.error("target_size too small compared to min_inactive.")
+            raise ValueError("target_size too small compared to min_inactive.")
+        
+        X = np.arange(len(dataframe))
+        msss = MultilabelStratifiedShuffleSplit(
+            n_splits=1,
+            train_size=remaining_target_size,
+            random_state=random_state
+        )
+        strat_indices, _ = next(msss.split(X, y_active))
+
+        selected = set(strat_indices) | guaranteed_indices
+        if len(selected) > target_size:
+            selected = np.random.choice(list(selected), size=target_size, replace=False)
+        
+        return dataframe.iloc[sorted(selected)].reset_index(drop=True)
+
 
     def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
         """
@@ -296,6 +356,13 @@ class ClassificationPreprocessor(TextPreprocessor):
         dataset = Dataset.from_pandas(dataframe)
 
         dataset = dataset.filter(self.filter_text_by_label, batched=True)
+
+        # Modified code to reduce number of samples
+        df = dataset.to_pandas()
+        subset_df = self.iterative_sampling(df)
+
+        dataset = Dataset.from_pandas(subset_df)
+
         dataset = dataset.map(self.preprocess_function, batched=True)
 
         if os.path.exists(self.cleaned_path):

@@ -40,6 +40,7 @@ huggingface-hub==0.33.2
 idna==3.10
 imagesize==1.4.1
 iniconfig==2.1.0
+iterative-stratification==0.1.9
 Jinja2==3.1.6
 joblib==1.5.1
 kiwisolver==1.4.8
