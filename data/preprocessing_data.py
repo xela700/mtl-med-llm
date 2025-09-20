@@ -295,6 +295,9 @@ class ClassificationPreprocessor(TextPreprocessor):
         active_set = set(active_labels)
         inactive_set = set(all_labels) - active_set
 
+        max_allowed = target_size // len(inactive_set)
+        min_inactive = min(min_inactive, max_allowed)
+
         # Matrix for labels being trained on
         label_to_index = {l: i for i, l in enumerate(active_labels)}
         y_active = np.zeros((len(dataframe), len(active_labels)), dtype=int)
@@ -320,6 +323,13 @@ class ClassificationPreprocessor(TextPreprocessor):
             raise ValueError("target_size too small compared to min_inactive.")
         
         X = np.arange(len(dataframe))
+
+        n_samples = len(X)
+        if remaining_target_size >= n_samples:
+            train_size = 1.0
+        else:
+            train_size = remaining_target_size / n_samples
+            
         msss = MultilabelStratifiedShuffleSplit(
             n_splits=1,
             train_size=remaining_target_size,
