@@ -295,8 +295,11 @@ class ClassificationPreprocessor(TextPreprocessor):
         active_set = set(active_labels)
         inactive_set = set(all_labels) - active_set
 
-        max_allowed = target_size // len(inactive_set)
-        min_inactive = min(min_inactive, max_allowed)
+        if inactive_set:
+            max_allowed = target_size // len(inactive_set)
+            min_inactive = min(min_inactive, max_allowed)
+        else:
+            min_inactive = 0
 
         # Matrix for labels being trained on
         label_to_index = {l: i for i, l in enumerate(active_labels)}
@@ -308,13 +311,17 @@ class ClassificationPreprocessor(TextPreprocessor):
         
         # Collecting indices to ensure some inactive labels remain
         guaranteed_indices = set()
+        rng = np.random.default_rng(random_state)
         if inactive_set:
             for l in inactive_set:
                 indices = [i for i, labels in enumerate(dataframe[self.label_col]) if l in labels]
                 if indices:
-                    np.random.seed(random_state)
-                    chosen = np.random.choice(indices, size=min(min_inactive, len(indices)), replace=False)
+                    chosen = rng.choice(indices, size=min(min_inactive, len(indices)), replace=False)
                     guaranteed_indices.update(chosen)
+        
+        if len(guaranteed_indices) > target_size * 0.3:
+            logger.warning("Inactive sampling taking >30% of dataset, trimming...")
+            guaranteed_indices = set(rng.choice(list(guaranteed_indices), size=int(target_size * 0.3), replace=False))
         
         # Iterative stratification
         remaining_target_size = target_size - len(guaranteed_indices)
@@ -329,17 +336,23 @@ class ClassificationPreprocessor(TextPreprocessor):
             train_size = 1.0
         else:
             train_size = remaining_target_size / n_samples
-            
+        
+        if train_size == 1.0:
+            test_size = None
+        else:
+            test_size = 1.0 - train_size
+
         msss = MultilabelStratifiedShuffleSplit(
             n_splits=1,
-            train_size=remaining_target_size,
+            train_size=train_size,
+            test_size=test_size,
             random_state=random_state
         )
         strat_indices, _ = next(msss.split(X, y_active))
 
         selected = set(strat_indices) | guaranteed_indices
         if len(selected) > target_size:
-            selected = np.random.choice(list(selected), size=target_size, replace=False)
+            selected = rng.choice(list(selected), size=target_size, replace=False)
         
         return dataframe.iloc[sorted(selected)].reset_index(drop=True)
 
