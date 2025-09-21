@@ -63,6 +63,9 @@ def main(args: list[str]) -> None:
         
         elif args.target == "classification_code":
             base_data = pd.read_csv(config["data"]["task_5"]["data_path"], header=None, sep='\t')
+            base_data[['labels', 'description']] = base_data[0].str.split(n=1, expand=True)
+            base_data['labels'].str.lstrip()
+            base_data['description'].str.lstrip()
             clean_path = config["data"]["task_5"]["tokenized_path"]
             label_map_path = config["data"]["task_2"]["label_map_path"]
             checkpoint = config["model"]["classification_checkpoint"]
@@ -78,8 +81,8 @@ def main(args: list[str]) -> None:
                 checkpoint=checkpoint,
                 cleaned_path=clean_path,
                 label_ids=label_ids,
-                text_col=1,
-                label_col=0
+                text_col='description',
+                label_col='labels'
             )
 
             preprocessor.preprocess(base_data)

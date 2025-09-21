@@ -435,8 +435,8 @@ class CodePreprocessor(TextPreprocessor):
             a note stays or gets dropped. 
         """
         filtered = []
-        for icd_codes in batch.get("labels", []):
-            keep = any(code in self.label_ids for code in icd_codes)
+        for icd_codes in batch[self.label_col]:
+            keep = icd_codes in self.label_ids
             filtered.append(keep)
         return filtered
     
@@ -474,9 +474,12 @@ class CodePreprocessor(TextPreprocessor):
             None
         """
         dataset = Dataset.from_pandas(dataframe)
+        print("Length of dataset pre filter:", len(dataset))
 
         dataset = dataset.filter(self.filter_text_by_label, batched=True)
+        print("Length of dataset post filter:", len(dataset))
         dataset = dataset.map(self.preprocess_function, batched=True)
+        print("Length of dataset post map:", len(dataset))
 
         if os.path.exists(self.cleaned_path):
             logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
