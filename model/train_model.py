@@ -9,7 +9,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
-from model.evaluate_model import classification_compute_metric, SummarizationMetrics,intent_compute_metrics
+from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics
 import torch
 import numpy as np
 import json
@@ -21,7 +21,7 @@ from typing import Union, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
-def classification_model_training(data_dir: str, label_mapping_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
+def classification_model_training(data_dir: str, label_mapping_dir: str, active_labels_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
     """
     Training method for fine-tuning a pre-trained encoder model on ICD-10 code
     classification task.
@@ -29,6 +29,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, checkpo
     Args:
         data_dir (str): path to dataset being used for training
         label_map_dir (str): path to label mapping (id2label and label2id)
+        active_labels_dir (str): path to dictionary of active labels
         checkpoint (str): pre-trained HuggingFace model used for training
         training_checkpoint_dir (str): directory to save in-training model config
         save_dir (str): path to saved PEFT weights for specified task
@@ -54,9 +55,12 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, checkpo
     except FileNotFoundError:
         logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
 
+    active_labels = load_data(active_labels_dir)
     label2id = mappings["label2id"]
     id2label = {int(k): v for k, v in mappings["id2label"].items()}
     num_labels = len(label2id)
+    active_label_indices = [label2id[label] for label in active_labels.keys()]
+    mask = [1 if i in active_label_indices else 0 for i in range(num_labels)]
 
     config = AutoConfig.from_pretrained(checkpoint)
     config.num_labels = num_labels
@@ -98,7 +102,27 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, checkpo
         """
         Custom Trainer subclass intended to help tackle ICD-10 class imbalance in MIMIC-IV dataset.
         Only used with trainer for classification. 
-        """    
+        """
+
+        def __init__(self, pos_weight=None, active_label_mask=None, model = None, args = None, data_collator = None, train_dataset = None, eval_dataset = None, processing_class = None, model_init = None, compute_loss_func = None, compute_metrics = None, callbacks = None, optimizers = ..., optimizer_cls_and_kwargs = None, preprocess_logits_for_metrics = None):
+            super().__init__(model, args, data_collator, train_dataset, eval_dataset, processing_class, model_init, compute_loss_func, compute_metrics, callbacks, optimizers, optimizer_cls_and_kwargs, preprocess_logits_for_metrics)
+            
+            pos_weight_tensor = (
+                torch.tensor(pos_weight, dtype=torch.float) if pos_weight is not None else None
+            )
+
+            self.criterion = torch.nn.BCEWithLogitsLoss(
+                pos_weight=pos_weight_tensor,
+                reduction='none'
+            )
+
+            if active_label_mask is not None:
+                self.active_label_mask = torch.tensor(
+                    active_label_mask, dtype=torch.float
+                )
+            else:
+                self.active_label_mask = None    
+
         def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False, **kwargs) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
             """
             Compute loss function that provides new loss function based on positive class weights.
@@ -113,10 +137,15 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, checkpo
             """
             labels = inputs.get("labels")
             outputs = model(**inputs)
-            logits = outputs.logits
+            logits = outputs.get("logits")
 
-            loss_function = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(logits.device))
-            loss = loss_function(logits, labels.float())
+            loss_function = self.criterion(logits, labels)
+
+            if self.active_label_mask is not None:
+                mask = self.active_label_mask.to(loss.device)
+                loss = loss * mask
+
+            loss = loss_function.mean()
 
             return (loss, outputs) if return_outputs else loss
 
@@ -127,7 +156,9 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, checkpo
         eval_dataset=val_dataset,
         processing_class=tokenizer,
         data_collator=data_collator,
-        compute_metrics=classification_compute_metric
+        compute_metrics=classification_compute_metric,
+        pos_weight=pos_weight,
+        active_label_mask=mask
     )
 
     trainer.train()
@@ -135,6 +166,28 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, checkpo
     model.save_pretrained(save_dir) # PEFT saved weights
     tokenizer.save_pretrained(save_dir)
     model.config.save_pretrained(save_dir)
+
+
+def compute_pos_weight(dataset: Dataset) -> Tensor:
+    """
+    Function to calculate positive class weight for classification pipeline. Intended to help with class imbalance
+    by increasing the penalty of positive labels.
+
+    Args:
+        dataset (Dataset): HuggingFace dataset with a "labels" columm. Labels are expected to contain multi-hot vectors
+
+    Returns:
+        Tensor: tensor of positive class weight for each class
+    """
+    all_labels = np.array(dataset["labels"])
+
+    positive_counts = all_labels.sum(axis=0)
+    total_samples = all_labels.shape[0]
+    negative_counts = total_samples - positive_counts
+
+    pos_weight = negative_counts / (positive_counts + 1e-5)
+    return torch.tensor(pos_weight, dtype=torch.float32)
+
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
     """
@@ -212,26 +265,6 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
     
-def compute_pos_weight(dataset: Dataset) -> Tensor:
-    """
-    Function to calculate positive class weight for classification pipeline. Intended to help with class imbalance
-    by increasing the penalty of positive labels.
-
-    Args:
-        dataset (Dataset): HuggingFace dataset with a "labels" columm. Labels are expected to contain multi-hot vectors
-
-    Returns:
-        Tensor: tensor of positive class weight for each class
-    """
-    all_labels = np.array(dataset["labels"])
-
-    positive_counts = all_labels.sum(axis=0)
-    total_samples = all_labels.shape[0]
-    negative_counts = total_samples - positive_counts
-
-    pos_weight = negative_counts / (positive_counts + 1e-5)
-    return torch.tensor(pos_weight, dtype=torch.float32)
-
 
 def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
     """
