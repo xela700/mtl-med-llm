@@ -51,6 +51,7 @@ data:
     tokenized_path: data/clean_path/code_dataset_tokenized
   
   classification_test_data: data/test_data/classification_test_data
+  classification_test_data_temp: data/test_data/classification_test_data_temp
   summarization_test_data: data/test_data/summarization_test_data
 
 model:
@@ -59,7 +60,9 @@ model:
   intent_checkpoint: distilbert/distilbert-base-uncased
 
   classification_model: model/saved_model/ft-biobert-large
+  classification_model_temp: model/saved_model/temp-ft-biobert-large
   classification_training_checkpoints: model/saved_model/ft-biobert-large-checkpoints
+  classification_training_checkpoints_temp: model/saved_model/temp-ft-biobert-large-checkpoints
 
   summarization_training_checkpoints: model/saved_model/ft-biobart-large-checkpoints
   summarization_model: model/saved_model/ft-biobart-large

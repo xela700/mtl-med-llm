@@ -217,16 +217,18 @@ def main(args: list[str]) -> None:
     
     elif args.command == "training":
         if args.target == "classification":
-            tokenized_data_dir = config["data"]["task_1"]["tokenized_path"]
+            tokenized_data_dir = config["data"]["task_1"]["temp_tokenized_path"] # modified to use fewer labels for initial training.
             label_dir = config["data"]["task_2"]["temp_data_path"] # modified to use fewer labels for initial training.
+            label_map_path = config["data"]["task_2"]["label_map_path"]
             checkpoint = config["model"]["classification_checkpoint"]
-            model_weights_dir = config["model"]["classification_model"]
-            training_checkpoints = config["model"]["classification_training_checkpoints"]
-            test_data_dir = config["data"]["classification_test_data"]
+            model_weights_dir = config["model"]["classification_model_temp"] # modified to use fewer labels for initial training.
+            training_checkpoints = config["model"]["classification_training_checkpoints_temp"] # modified to use fewer labels for initial training.
+            test_data_dir = config["data"]["classification_test_data_temp"] # modified to use fewer labels for initial training.
 
             classification_model_training(
                 data_dir=tokenized_data_dir, 
-                label_dir=label_dir, 
+                active_labels_dir=label_dir,
+                label_mapping_dir=label_map_path, 
                 checkpoint=checkpoint, 
                 save_dir=model_weights_dir, 
                 training_checkpoint_dir=training_checkpoints,
