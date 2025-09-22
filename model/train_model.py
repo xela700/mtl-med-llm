@@ -57,9 +57,10 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
 
     active_labels = load_data(active_labels_dir)
     label2id = mappings["label2id"]
+    active_labels = list(active_labels["icd_code"])
     id2label = {int(k): v for k, v in mappings["id2label"].items()}
     num_labels = len(label2id)
-    active_label_indices = [label2id[label] for label in active_labels.keys()]
+    active_label_indices = [label2id[label] for label in active_labels]
     mask = [1 if i in active_label_indices else 0 for i in range(num_labels)]
 
     config = AutoConfig.from_pretrained(checkpoint)
@@ -87,7 +88,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         output_dir=training_checkpoint_dir,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
-        num_train_epochs=3,
+        num_train_epochs=10,
         eval_strategy="epoch",
         save_strategy="epoch",
         logging_dir="./logs",
@@ -104,24 +105,21 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         Only used with trainer for classification. 
         """
 
-        def __init__(self, pos_weight=None, active_label_mask=None, model = None, args = None, data_collator = None, train_dataset = None, eval_dataset = None, processing_class = None, model_init = None, compute_loss_func = None, compute_metrics = None, callbacks = None, optimizers = ..., optimizer_cls_and_kwargs = None, preprocess_logits_for_metrics = None):
+        def __init__(self, pos_weight=None, active_label_mask=None, model = None, args = None, data_collator = None, train_dataset = None, eval_dataset = None, processing_class = None, model_init = None, compute_loss_func = None, compute_metrics = None, callbacks = None, optimizers = (None, None), optimizer_cls_and_kwargs = None, preprocess_logits_for_metrics = None):
             super().__init__(model, args, data_collator, train_dataset, eval_dataset, processing_class, model_init, compute_loss_func, compute_metrics, callbacks, optimizers, optimizer_cls_and_kwargs, preprocess_logits_for_metrics)
             
-            pos_weight_tensor = (
+            self.pos_weight = (
                 torch.tensor(pos_weight, dtype=torch.float) if pos_weight is not None else None
             )
 
-            self.criterion = torch.nn.BCEWithLogitsLoss(
-                pos_weight=pos_weight_tensor,
-                reduction='none'
+            self.active_label_mask = (
+                torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
             )
 
-            if active_label_mask is not None:
-                self.active_label_mask = torch.tensor(
-                    active_label_mask, dtype=torch.float
-                )
-            else:
-                self.active_label_mask = None    
+            self.criterion = torch.nn.BCEWithLogitsLoss(
+                pos_weight=self.pos_weight,
+                reduction="none"
+            )  
 
         def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False, **kwargs) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
             """
@@ -139,13 +137,18 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
             outputs = model(**inputs)
             logits = outputs.get("logits")
 
-            loss_function = self.criterion(logits, labels)
+            labels = labels.to(logits.device).float()
+
+            if self.pos_weight is not None:
+                self.criterion.pos_weight = self.pos_weight.to(logits.device)
+
+            loss_matrix = self.criterion(logits, labels)
 
             if self.active_label_mask is not None:
-                mask = self.active_label_mask.to(loss.device)
-                loss = loss * mask
+                mask = self.active_label_mask.to(logits.device)
+                loss_matrix = loss_matrix * mask
 
-            loss = loss_function.mean()
+            loss = loss_matrix.mean()
 
             return (loss, outputs) if return_outputs else loss
 
