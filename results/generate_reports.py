@@ -20,7 +20,7 @@ def classification_metrics() -> None:
         None
     """
 
-    checkpoint_directory = "model/saved_model/ft-biobert-large-checkpoints/checkpoint-32991"
+    checkpoint_directory = "model/saved_model/temp-ft-biobert-large-checkpoints/checkpoint-8990"
 
     training_epochs = []
     training_losses = []
@@ -62,7 +62,7 @@ def classification_metrics() -> None:
     plt.ylabel("Loss")
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("results/reporting/classification_training_loss.jpg")
+    plt.savefig("results/reporting/temp_classification_training_loss.jpg")
     plt.show()
     plt.clf()
 
@@ -208,9 +208,9 @@ def intent_metrics() -> None:
     plt.clf()
 
 if __name__ == "__main__":
-    # classification_metrics()
+    classification_metrics()
     # summarization_metrics()
-    intent_metrics()
+    # intent_metrics()
 
 
 
