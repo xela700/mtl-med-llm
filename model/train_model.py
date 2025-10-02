@@ -267,7 +267,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
 
     model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
-    
+
 
 def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
     """
