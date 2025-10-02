@@ -9,7 +9,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
-from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics
+from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics, rouge_metrics
 import torch
 import numpy as np
 import json
@@ -234,19 +234,15 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
 
     training_args = Seq2SeqTrainingArguments(
         output_dir=training_checkpoint_dir,
-        per_device_train_batch_size=1,
-        per_device_eval_batch_size=1,
-        num_train_epochs=3,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=4,
+        num_train_epochs=10,
         logging_dir="./logs",
-        save_strategy="steps",
-        eval_strategy="steps",
-        eval_steps=100,
-        save_steps=100,
+        save_strategy="epoch",
+        eval_strategy="no",
+        logging_strategy="steps",
         logging_steps=50,
         save_total_limit=2,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-        greater_is_better=True,
         predict_with_generate=False,
         fp16=True
     )
@@ -263,7 +259,24 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         compute_metrics=None
     )
 
-    trainer.train()
+    # Modifying summarization training to halt training every epoch to evaluate on ROUGE
+    num_epochs = int(training_args.num_train_epochs)
+    for epoch in range(num_epochs):
+        print(f"Starting epoch {epoch+1} out of {num_epochs}")
+
+        trainer.train(resume_from_checkpoint=True)
+
+        trainer.save_model(f"{training_checkpoint_dir}/epoch_{epoch+1}") # saving checkpoint
+
+        metrics = rouge_metrics(model.to("cuda"), val_dataset, tokenizer) # all rouge metrics
+        print(f"Epoch {epoch+1} ROUGE-L:", metrics["rougeL"])
+
+        with open("results/reporting/summarization_rouge_results.json", "a") as f:
+            f.write(json.dumps({"epoch": epoch+1, **metrics}) + "\n")
+        
+        model.to("cpu")
+        torch.cuda.empty_cache() # freeing GPU resources for training restart
+
 
     model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)

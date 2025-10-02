@@ -6,6 +6,7 @@ from evaluate import load
 import numpy as np
 import torch
 import logging
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,40 @@ class SummarizationMetrics:
             "bertscore_f1": np.mean(bert_results["f1"]) * 100
         }
 
+def rouge_metrics(model, dataset, tokenizer, batch_size=8, max_gen_length=128):
+    """
+    Used to evaluate the summarization model on ROUGE between epochs using the current checkpoint.
+    Substitute for running evaluations during model training (GPU resource conservation)
+
+    Args:
+        model (transformers.AutoModelForSeq2SeqLM): model being evaluated
+        dataset (Dataset): validation dataset
+        tokenizer (transformers.AutoTokenizer): tokenizer associated with model
+        batch_size (int): size of evaluation batch
+        max_gen_length (int): max number of tokens generated for prediction
+    
+    Returns:
+        dict[str:float]: rouge metrics
+    """
+    rouge = load("rouge")
+    model.eval()
+    preds, refs = [], []
+    for i in tqdm(range(0, len(dataset), batch_size)):
+        batch = dataset[i:i+batch_size]
+        inputs = tokenizer(batch["discharge_note"], return_tensors="pt",
+                           truncation=True, padding=True).to("cuda")
+        
+        with torch.no_grad():
+            outputs = model.generate(**inputs, max_new_tokens=max_gen_length)
+        
+        decoded_preds = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        decoded_labels = [label for label in batch["target"]]
+
+        preds.extend(decoded_preds)
+        refs.extend(decoded_labels)
+
+    result = rouge.compute(predictions=preds, references=refs, use_stemmer=True)
+    return result
 
 def intent_compute_metrics(eva_pred):
     """
