@@ -236,19 +236,23 @@ def main(args: list[str]) -> None:
                 )
         
         elif args.target == "summarization":
-            tokenized_data_dir = config["data"]["task_3"]["tokenized_path"]
-            checkpoint = config["model"]["summarization_checkpoint"]
-            model_weights_dir = config["model"]["summarization_model"]
-            training_checkpoints = config["model"]["summarization_training_checkpoints"]
-            test_data_dir = config["data"]["summarization_test_data"]
+            print(f"Running Summarization model for {args.num_runs} runs")
+            for i in range(args.num_runs):
+                tokenized_data_dir = config["data"]["task_3"]["tokenized_path"]
+                checkpoint = config["model"]["summarization_checkpoint"]
+                model_weights_dir = config["model"]["summarization_model"]
+                training_checkpoints = config["model"]["summarization_training_checkpoints"]
+                test_data_dir = config["data"]["summarization_test_data"]
+                metric_dir = f"results/reporting/summarization_rouge_results_run_{i+1}.json"
 
-            summarization_model_training(
-                data_dir=tokenized_data_dir,
-                checkpoint=checkpoint,
-                save_dir=model_weights_dir,
-                training_checkpoint_dir=training_checkpoints,
-                test_data_dir=test_data_dir
-            )
+                summarization_model_training(
+                    data_dir=tokenized_data_dir,
+                    checkpoint=checkpoint,
+                    save_dir=model_weights_dir,
+                    training_checkpoint_dir=training_checkpoints,
+                    test_data_dir=test_data_dir,
+                    metric_dir=metric_dir
+                )
         
         elif args.target == "intent_targeting":
             tokenized_data_dir = config["data"]["task_4"]["tokenized_path"]
@@ -282,6 +286,7 @@ if __name__ == "__main__":
 
     training_parser = subparsers.add_parser("training")
     training_parser.add_argument("target", choices=["classification", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")
+    training_parser.add_argument("num_runs", type=int, help="Number of runs the model will both train and evaluate")
 
     args = parser.parse_args()
 

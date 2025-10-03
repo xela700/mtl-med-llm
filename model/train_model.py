@@ -192,7 +192,7 @@ def compute_pos_weight(dataset: Dataset) -> Tensor:
     return torch.tensor(pos_weight, dtype=torch.float32)
 
 
-def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
+def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str) -> None:
     """
     Training method for fine-tuning a pre-trained encoder-decoder model on clinical note summarization task.
 
@@ -202,6 +202,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         training_checkpoint_dir (str): directory to save in-training model config
         save_dir (str): path to saved PEFT weights for specified task
         test_data_dir (str): path to save test data to
+        metric_dir (str): path to save metrics from evaluation to
 
     Returns:
         None
@@ -270,7 +271,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         metrics = rouge_metrics(model, val_dataset, tokenizer) # all rouge metrics
         print(f"Epoch {epoch+1} ROUGE-L:", metrics["rougeL"])
 
-        with open("results/reporting/summarization_rouge_results.json", "a") as f:
+        with open(metric_dir, "a") as f:
             f.write(json.dumps({"epoch": epoch+1, **metrics}) + "\n")
         
         torch.cuda.empty_cache() # freeing GPU resources for training restart
