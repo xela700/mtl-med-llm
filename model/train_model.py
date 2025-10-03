@@ -88,14 +88,6 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
 
         model = get_peft_model(model=model, peft_config=lora_config)
 
-        # Modifications to use frozen code description encoder as part of training
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        base_encoder = model
-        label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
-        model = CodeDescriptionWrapper(config=config, base_encoder=base_encoder, label_embeds=label_embeds)
-        # End frozen code description encoder modifications
-        metrics_logger.run_counter = run
-
         training_args = TrainingArguments(
             output_dir=training_checkpoint_dir,
             per_device_train_batch_size=8,
@@ -110,6 +102,20 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         )
 
         pos_weight = compute_pos_weight(train_dataset)
+
+        # Modifications to use frozen code description encoder as part of training
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        base_encoder = model
+        label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
+        model = CodeDescriptionWrapper(
+            config=config, 
+            base_encoder=base_encoder, 
+            label_embeds=label_embeds,
+            pos_weight=pos_weight,
+            active_label_mask=mask
+            )
+        # End frozen code description encoder modifications
+        metrics_logger.run_counter = run
 
         trainer = WeightedLossTrainer(
             model=model,
@@ -251,17 +257,16 @@ def encode_labels(descriptions, tokenizer, encoder, device):
 class CodeDescriptionWrapper(PreTrainedModel):
     config_class = AutoConfig
 
-    def __init__(self, config, base_encoder, label_embeds):
+    def __init__(self, config, base_encoder, label_embeds, pos_weight=None, active_label_mask=None):
         super().__init__(config)
         self.base_encoder = base_encoder
         self.register_buffer("label_embeds", label_embeds)
+        self.pos_weight = torch.tensor(pos_weight, dtype=torch.float) if pos_weight is not None else None
+        self.active_label_mask = torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
 
-    def forward(self, input_ids=None, attention_mask=None, labels=None, **kwargs):
-        outputs = self.base_encoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            **kwargs
-        )
+    def forward(self, **inputs):
+        labels = inputs.get("labels", None)
+        outputs = self.base_encoder.base_model(**inputs)
 
         note_embeds = outputs.last_hidden_state[:, 0, :]
         note_embeds = torch.nn.functional.normalize(note_embeds, dim=1)
@@ -271,11 +276,23 @@ class CodeDescriptionWrapper(PreTrainedModel):
 
         loss = None
         if labels is not None:
-            labels = labels.float()
-            loss_function = torch.nn.BCEWithLogitsLoss()
-            loss = loss_function(logits, labels)
+            labels = labels.float().to(logits.device)
+            loss_function = torch.nn.BCEWithLogitsLoss(
+                pos_weight=self.pos_weight.to(logits.device) if self.pos_weight is not None else None,
+                reduction="none"
+            )
+        loss_matrix = loss_function(logits, labels)
+
+        if self.active_label_mask is not None:
+            mask = self.active_label_mask.to(logits.device)
+            loss_matrix = loss_matrix * mask
         
-        return {"loss": loss, "logits": logits, "hidden_states": outputs.hidden_states}
+        loss = loss_matrix.mean()
+        
+        return {
+            "loss": loss, 
+            "logits": logits, 
+            "hidden_states": outputs.hidden_states}
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str) -> None:
     """
