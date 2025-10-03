@@ -224,6 +224,8 @@ def main(args: list[str]) -> None:
             model_weights_dir = config["model"]["classification_model_temp"] # modified to use fewer labels for initial training.
             training_checkpoints = config["model"]["classification_training_checkpoints_temp"] # modified to use fewer labels for initial training.
             test_data_dir = config["data"]["classification_test_data_temp"] # modified to use fewer labels for initial training.
+            metrics_dir = config["results"]["classification_w_code"]
+            num_runs = args.num_runs
 
             classification_model_training(
                 data_dir=tokenized_data_dir, 
@@ -232,7 +234,9 @@ def main(args: list[str]) -> None:
                 checkpoint=checkpoint, 
                 save_dir=model_weights_dir, 
                 training_checkpoint_dir=training_checkpoints,
-                test_data_dir=test_data_dir
+                test_data_dir=test_data_dir,
+                metric_dir=metrics_dir,
+                run_number=num_runs
                 )
         
         elif args.target == "classification_code":

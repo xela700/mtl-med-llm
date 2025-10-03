@@ -71,3 +71,6 @@ model:
 
   intent_training_checkpoints: model/saved_model/ft-distilbert-base-checkpoints
   intent_model: model/saved_model/ft-distilbert-base
+
+results:
+  classification_w_code: results/reporting/classification_w_code

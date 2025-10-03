@@ -2,7 +2,7 @@
 Module to set up training tasks for all NLP models.
 """
 
-from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, PreTrainedModel
+from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, PreTrainedModel, AutoModel
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
@@ -218,12 +218,21 @@ def code_classification_model_setup(checkpoint, code_label_map, code_desc_map, l
             code2desc = json.load(f)
     except FileNotFoundError:
         logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
+
+    def check_description(code, code2desc):
+        if code in code2desc:
+            return code2desc[code]
+        if (code + "0") in code2desc:
+            return code2desc[code + "0"]
+        
+        print(f"Warning: no description for code {code}")
+        return "No description available"
     
-    descriptions = [code2desc[id2label[i]] for i in range(len(id2label))]
+    descriptions = [check_description(code=id2label[i], code2desc=code2desc) for i in range(len(id2label))]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-    frozen_encoder = AutoModelForSequenceClassification.from_pretrained(checkpoint).to(device)
+    frozen_encoder = AutoModel.from_pretrained(checkpoint).to(device)
 
     for param in frozen_encoder.parameters():
         param.requires_grad = False
