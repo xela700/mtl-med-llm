@@ -553,7 +553,7 @@ class SummarizationPreprocessor(TextPreprocessor):
         
         dataset = Dataset.from_pandas(dataframe)
 
-        dataset = dataset.map(self.preprocess_function, batched=True, remove_columns=["discharge_note", "target", "source_type"])
+        dataset = dataset.map(self.preprocess_function, batched=True, remove_columns=[])
 
         if os.path.exists(self.cleaned_path):
             logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")

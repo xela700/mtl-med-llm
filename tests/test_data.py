@@ -58,7 +58,11 @@ def examine_summarization_data():
 
     combined = load_from_disk(config["data"]["task_3"]["tokenized_path"])
     print("Total for summary:", len(combined))
+    print("Summary columns:", combined.column_names)
+    example = combined[0]
+    print(example.keys())
+    print(type(example["discharge_note"]))
 
 if __name__ == "__main__":
-    examine_classification_data()
-    # examine_summarization_data()
+    # examine_classification_data()
+    examine_summarization_data()

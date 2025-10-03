@@ -79,7 +79,7 @@ class SummarizationMetrics:
             "bertscore_f1": np.mean(bert_results["f1"]) * 100
         }
 
-def rouge_metrics(model, dataset, tokenizer, batch_size=8, max_gen_length=128):
+def rouge_metrics(model, dataset, tokenizer, batch_size=8, device="cuda", max_gen_length=256):
     """
     Used to evaluate the summarization model on ROUGE between epochs using the current checkpoint.
     Substitute for running evaluations during model training (GPU resource conservation)
@@ -89,6 +89,7 @@ def rouge_metrics(model, dataset, tokenizer, batch_size=8, max_gen_length=128):
         dataset (Dataset): validation dataset
         tokenizer (transformers.AutoTokenizer): tokenizer associated with model
         batch_size (int): size of evaluation batch
+        device (str): device for evaluation ("cuda" or "cpu")
         max_gen_length (int): max number of tokens generated for prediction
     
     Returns:
@@ -96,20 +97,32 @@ def rouge_metrics(model, dataset, tokenizer, batch_size=8, max_gen_length=128):
     """
     rouge = load("rouge")
     model.eval()
+    model.to(device)
     preds, refs = [], []
     for i in tqdm(range(0, len(dataset), batch_size)):
         batch = dataset[i:i+batch_size]
-        inputs = tokenizer(batch["discharge_note"], return_tensors="pt",
-                           truncation=True, padding=True).to("cuda")
+        input_texts = batch["discharge_note"]
+        reference_texts = batch["target"]
+
+        inputs = tokenizer(
+            input_texts,
+            return_tensors="pt",
+            truncation=True,
+            max_length=1024,
+            padding=True
+        ).to(device)
         
         with torch.no_grad():
-            outputs = model.generate(**inputs, max_new_tokens=max_gen_length)
+            outputs = model.generate(**inputs, 
+                                     max_new_tokens=max_gen_length,
+                                     do_sample=False,
+                                     pad_token_id=tokenizer.pad_token_id)
         
         decoded_preds = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-        decoded_labels = [label for label in batch["target"]]
+        decoded_refs = reference_texts
 
         preds.extend(decoded_preds)
-        refs.extend(decoded_labels)
+        refs.extend(decoded_refs)
 
     result = rouge.compute(predictions=preds, references=refs, use_stemmer=True)
     return result
