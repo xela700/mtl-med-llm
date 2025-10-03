@@ -2,14 +2,14 @@
 Module to set up training tasks for all NLP models.
 """
 
-from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments
+from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, PreTrainedModel
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
-from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics, rouge_metrics
+from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback
 import torch
 import numpy as np
 import json
@@ -21,7 +21,7 @@ from typing import Union, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
-def classification_model_training(data_dir: str, label_mapping_dir: str, active_labels_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str) -> None:
+def classification_model_training(data_dir: str, label_mapping_dir: str, active_labels_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str, run_number: int = 1) -> None:
     """
     Training method for fine-tuning a pre-trained encoder model on ICD-10 code
     classification task.
@@ -63,113 +63,125 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
     active_label_indices = [label2id[label] for label in active_labels]
     mask = [1 if i in active_label_indices else 0 for i in range(num_labels)]
 
-    config = AutoConfig.from_pretrained(checkpoint)
-    config.num_labels = num_labels
-    config.label2id = label2id
-    config.id2label = id2label
-    config.problem_type = "multi_label_classification"
+    metrics_logger = MetricsLoggerCallback(output_dir=metric_dir)
 
-    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-    model = AutoModelForSequenceClassification.from_pretrained(checkpoint, config=config)
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    for run in range(run_number):
 
-    lora_config = LoraConfig( # PERF tuning
-        r=8,
-        lora_alpha=16,
-        target_modules=["query", "value"],
-        lora_dropout=0.1,
-        bias="none",
-        task_type=TaskType.SEQ_CLS
-    )
+        config = AutoConfig.from_pretrained(checkpoint)
+        config.num_labels = num_labels
+        config.label2id = label2id
+        config.id2label = id2label
+        config.problem_type = "multi_label_classification"
 
-    model = get_peft_model(model=model, peft_config=lora_config)
+        tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+        model = AutoModelForSequenceClassification.from_pretrained(checkpoint, config=config)
+        data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    training_args = TrainingArguments(
-        output_dir=training_checkpoint_dir,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
-        num_train_epochs=10,
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        logging_dir="./logs",
-        load_best_model_at_end=True,
-        metric_for_best_model="f1_macro",
-        greater_is_better=True
-    )
+        lora_config = LoraConfig( # PERF tuning
+            r=8,
+            lora_alpha=16,
+            target_modules=["query", "value"],
+            lora_dropout=0.1,
+            bias="none",
+            task_type=TaskType.SEQ_CLS
+        )
 
-    pos_weight = compute_pos_weight(train_dataset)
+        model = get_peft_model(model=model, peft_config=lora_config)
 
-    class WeightedLossTrainer(Trainer):
-        """
-        Custom Trainer subclass intended to help tackle ICD-10 class imbalance in MIMIC-IV dataset.
-        Only used with trainer for classification. 
-        """
+        # Modifications to use frozen code description encoder as part of training
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        base_encoder = model
+        label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
+        model = CodeDescriptionWrapper(config=config, base_encoder=base_encoder, label_embeds=label_embeds)
+        # End frozen code description encoder modifications
+        metrics_logger.run_counter = run
 
-        def __init__(self, pos_weight=None, active_label_mask=None, model = None, args = None, data_collator = None, train_dataset = None, eval_dataset = None, processing_class = None, model_init = None, compute_loss_func = None, compute_metrics = None, callbacks = None, optimizers = (None, None), optimizer_cls_and_kwargs = None, preprocess_logits_for_metrics = None):
-            super().__init__(model, args, data_collator, train_dataset, eval_dataset, processing_class, model_init, compute_loss_func, compute_metrics, callbacks, optimizers, optimizer_cls_and_kwargs, preprocess_logits_for_metrics)
-            
-            self.pos_weight = (
-                torch.tensor(pos_weight, dtype=torch.float) if pos_weight is not None else None
-            )
+        training_args = TrainingArguments(
+            output_dir=training_checkpoint_dir,
+            per_device_train_batch_size=8,
+            per_device_eval_batch_size=8,
+            num_train_epochs=10,
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            logging_dir="./logs",
+            load_best_model_at_end=True,
+            metric_for_best_model="f1_macro",
+            greater_is_better=True
+        )
 
-            self.active_label_mask = (
-                torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
-            )
+        pos_weight = compute_pos_weight(train_dataset)
 
-            self.criterion = torch.nn.BCEWithLogitsLoss(
-                pos_weight=self.pos_weight,
-                reduction="none"
-            )  
+        trainer = WeightedLossTrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            processing_class=tokenizer,
+            data_collator=data_collator,
+            compute_metrics=classification_compute_metric,
+            pos_weight=pos_weight,
+            active_label_mask=mask,
+            callbacks=[metrics_logger]
+        )
 
-        def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False, **kwargs) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
-            """
-            Compute loss function that provides new loss function based on positive class weights.
-
-            Args:
-                model (AutoModel): classification training model
-                inputs (dict[str:Tensor]): dictionary of the training inputs
-                return_outputs (bool): controlled by HuggingFace Trainer class. False during training (only loss needed). True for evaluation/prediction.
-
-            Returns: 
-                Tensor | (Tensor, SequenceClassifierOutput): tuple with the loss and model outputs or just the loss, depending on stage.
-            """
-            labels = inputs.get("labels")
-            outputs = model(**inputs)
-            logits = outputs.get("logits")
-
-            labels = labels.to(logits.device).float()
-
-            if self.pos_weight is not None:
-                self.criterion.pos_weight = self.pos_weight.to(logits.device)
-
-            loss_matrix = self.criterion(logits, labels)
-
-            if self.active_label_mask is not None:
-                mask = self.active_label_mask.to(logits.device)
-                loss_matrix = loss_matrix * mask
-
-            loss = loss_matrix.mean()
-
-            return (loss, outputs) if return_outputs else loss
-
-    trainer = WeightedLossTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
-        processing_class=tokenizer,
-        data_collator=data_collator,
-        compute_metrics=classification_compute_metric,
-        pos_weight=pos_weight,
-        active_label_mask=mask
-    )
-
-    trainer.train()
+        trainer.train()
 
     model.save_pretrained(save_dir) # PEFT saved weights
     tokenizer.save_pretrained(save_dir)
     model.config.save_pretrained(save_dir)
 
+class WeightedLossTrainer(Trainer):
+    """
+    Custom Trainer subclass intended to help tackle ICD-10 class imbalance in MIMIC-IV dataset.
+    Only used with trainer for classification. 
+    """
+
+    def __init__(self, pos_weight=None, active_label_mask=None, model = None, args = None, data_collator = None, train_dataset = None, eval_dataset = None, processing_class = None, model_init = None, compute_loss_func = None, compute_metrics = None, callbacks = None, optimizers = (None, None), optimizer_cls_and_kwargs = None, preprocess_logits_for_metrics = None):
+        super().__init__(model, args, data_collator, train_dataset, eval_dataset, processing_class, model_init, compute_loss_func, compute_metrics, callbacks, optimizers, optimizer_cls_and_kwargs, preprocess_logits_for_metrics)
+                
+        self.pos_weight = (
+            torch.tensor(pos_weight, dtype=torch.float) if pos_weight is not None else None
+        )
+
+        self.active_label_mask = (
+            torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
+        )
+
+        self.criterion = torch.nn.BCEWithLogitsLoss(
+            pos_weight=self.pos_weight,
+            reduction="none"
+        )  
+
+    def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False, **kwargs) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
+        """
+        Compute loss function that provides new loss function based on positive class weights.
+
+        Args:
+            model (AutoModel): classification training model
+            inputs (dict[str:Tensor]): dictionary of the training inputs
+            return_outputs (bool): controlled by HuggingFace Trainer class. False during training (only loss needed). True for evaluation/prediction.
+
+        Returns: 
+            Tensor | (Tensor, SequenceClassifierOutput): tuple with the loss and model outputs or just the loss, depending on stage.
+        """
+        labels = inputs.get("labels")
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+
+        labels = labels.to(logits.device).float()
+
+        if self.pos_weight is not None:
+            self.criterion.pos_weight = self.pos_weight.to(logits.device)
+
+        loss_matrix = self.criterion(logits, labels)
+
+        if self.active_label_mask is not None:
+            mask = self.active_label_mask.to(logits.device)
+            loss_matrix = loss_matrix * mask
+
+        loss = loss_matrix.mean()
+
+        return (loss, outputs) if return_outputs else loss
 
 def compute_pos_weight(dataset: Dataset) -> Tensor:
     """
@@ -191,6 +203,70 @@ def compute_pos_weight(dataset: Dataset) -> Tensor:
     pos_weight = negative_counts / (positive_counts + 1e-5)
     return torch.tensor(pos_weight, dtype=torch.float32)
 
+
+def code_classification_model_setup(checkpoint, code_label_map, code_desc_map, label_embeddings_dir):
+    try:
+        with open(code_label_map) as f:
+            mappings = json.load(f)
+    except FileNotFoundError:
+        logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
+    
+    id2label = {int(k): v for k, v in mappings["id2label"].items()}
+
+    try:
+        with open(code_desc_map) as f:
+            code2desc = json.load(f)
+    except FileNotFoundError:
+        logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
+    
+    descriptions = [code2desc[id2label[i]] for i in range(len(id2label))]
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    frozen_encoder = AutoModelForSequenceClassification.from_pretrained(checkpoint).to(device)
+
+    for param in frozen_encoder.parameters():
+        param.requires_grad = False
+    frozen_encoder.eval()
+
+    label_embeds = encode_labels(descriptions=descriptions, tokenizer=tokenizer, encoder=frozen_encoder, device=device)
+    torch.save(label_embeds.cpu(), label_embeddings_dir)
+
+def encode_labels(descriptions, tokenizer, encoder, device):
+        inputs = tokenizer(descriptions, padding=True, truncation=True, return_tensors="pt").to(device)
+        with torch.no_grad():
+            outputs = encoder(**inputs)
+            pooled = outputs.last_hidden_state.mean(dim=1) # uses mean pooling
+        return torch.nn.functional.normalize(pooled, dim=1)
+
+class CodeDescriptionWrapper(PreTrainedModel):
+    config_class = AutoConfig
+
+    def __init__(self, config, base_encoder, label_embeds):
+        super().__init__(config)
+        self.base_encoder = base_encoder
+        self.register_buffer("label_embeds", label_embeds)
+
+    def forward(self, input_ids=None, attention_mask=None, labels=None, **kwargs):
+        outputs = self.base_encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            **kwargs
+        )
+
+        note_embeds = outputs.last_hidden_state[:, 0, :]
+        note_embeds = torch.nn.functional.normalize(note_embeds, dim=1)
+        
+        # Dot product logits between base encoder and frozen code desc encoder
+        logits = torch.matmul(note_embeds, self.label_embeds.T)
+
+        loss = None
+        if labels is not None:
+            labels = labels.float()
+            loss_function = torch.nn.BCEWithLogitsLoss()
+            loss = loss_function(logits, labels)
+        
+        return {"loss": loss, "logits": logits, "hidden_states": outputs.hidden_states}
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str) -> None:
     """

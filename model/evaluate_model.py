@@ -3,12 +3,36 @@ from sklearn.metrics import (
     precision_score, recall_score, roc_auc_score
 )
 from evaluate import load
+from transformers import TrainerCallback
+import json
+import os
 import numpy as np
 import torch
 import logging
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+class MetricsLoggerCallback(TrainerCallback):
+    
+    def __init__(self, output_dir):
+        super().__init__()
+        self.output_dir = output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        self.run_counter = 0
+    
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        
+        if metrics is None:
+            return
+        
+        run_id = getattr(self, "run_counter", 0)
+        epoch = int(state.epoch) if state.epoch is not None else state.global_step
+        file_name = f"metrics_run{run_id}_epoch{epoch}.json"
+        file_path = os.path.join(self.output_dir, file_name)
+
+        with open(file_path, "w") as f:
+            json.dump(metrics, f, indent=2)
 
 def classification_compute_metric(eval_preds):
     """

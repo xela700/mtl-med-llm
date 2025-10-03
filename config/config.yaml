@@ -49,6 +49,8 @@ data:
     description: "Data related to code encoder for classification task. Contains 'code: description' style data."
     data_path: data/raw_data/icd10cm_codes_2026.txt
     tokenized_path: data/clean_path/code_dataset_tokenized
+    label_description_path: data/cleaned_data/code_desc_map.json
+    label_embeddings_path: model/saved_model/class_label_embeds/label_embeddings.pt
   
   classification_test_data: data/test_data/classification_test_data
   classification_test_data_temp: data/test_data/classification_test_data_temp

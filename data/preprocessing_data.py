@@ -415,12 +415,14 @@ class CodePreprocessor(TextPreprocessor):
         label_col (str): column with ICD codes
     """
 
-    __slots__ = ("label_ids", "label_col")
+    __slots__ = ("label_ids", "label_col", "supp_labels")
 
     def __init__(self, checkpoint: str, cleaned_path: str, label_ids: dict[str:int], text_col: str, label_col: str, remove_sections:list[str]=None):
         super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.label_ids = label_ids
         self.label_col = label_col
+        supp_labels = [f"{label}0" for label in self.label_ids]
+        self.supp_labels = set(supp_labels)
     
     def filter_text_by_label(self, batch: dict[str, list[str]]) -> list[bool]:
         """
@@ -436,7 +438,7 @@ class CodePreprocessor(TextPreprocessor):
         """
         filtered = []
         for icd_codes in batch[self.label_col]:
-            keep = icd_codes in self.label_ids
+            keep = icd_codes in self.label_ids or icd_codes in self.supp_labels
             filtered.append(keep)
         return filtered
     
@@ -478,8 +480,11 @@ class CodePreprocessor(TextPreprocessor):
 
         dataset = dataset.filter(self.filter_text_by_label, batched=True)
         print("Length of dataset post filter:", len(dataset))
-        dataset = dataset.map(self.preprocess_function, batched=True)
-        print("Length of dataset post map:", len(dataset))
+        # dataset = dataset.map(self.preprocess_function, batched=True)
+        code2desc = dict(zip(dataset[self.label_col], dataset[self.text_col])) # mapping for later use
+        # print("Length of dataset post map:", len(dataset))
+        with open(f"data/cleaned_data/code_desc_map.json", "w") as f:
+            json.dump(code2desc, f)
 
         if os.path.exists(self.cleaned_path):
             logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")

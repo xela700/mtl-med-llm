@@ -17,7 +17,7 @@ from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
 from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor, CodePreprocessor
-from model.train_model import classification_model_training, summarization_model_training, intent_model_training
+from model.train_model import classification_model_training, summarization_model_training, intent_model_training, code_classification_model_setup
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +235,19 @@ def main(args: list[str]) -> None:
                 test_data_dir=test_data_dir
                 )
         
+        elif args.target == "classification_code":
+            checkpoint = config["model"]["classification_checkpoint"]
+            code_label_map = config["data"]["task_2"]["label_map_path"]
+            label_desc = config["data"]["task_5"]["label_description_path"]
+            label_embeddings =config["data"]["task_5"]["label_embeddings_path"]
+
+            code_classification_model_setup(
+                checkpoint=checkpoint,
+                code_label_map=code_label_map,
+                code_desc_map=label_desc,
+                label_embeddings_dir=label_embeddings
+            )
+        
         elif args.target == "summarization":
             print(f"Running Summarization model for {args.num_runs} runs")
             for i in range(args.num_runs):
@@ -285,8 +298,8 @@ if __name__ == "__main__":
     preprocess_parser.add_argument("target", choices=["classification_base", "classification_code", "summary_generation", "summarization", "intent_targeting"], help="Specify which preprocess pipeline(s) to initiate")
 
     training_parser = subparsers.add_parser("training")
-    training_parser.add_argument("target", choices=["classification", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")
-    training_parser.add_argument("num_runs", type=int, help="Number of runs the model will both train and evaluate")
+    training_parser.add_argument("target", choices=["classification", "classification_code", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")
+    training_parser.add_argument("num_runs", type=int, default=1, nargs="?", help="Number of runs the model will both train and evaluate (optional, default 1)")
 
     args = parser.parse_args()
 
