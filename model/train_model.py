@@ -272,9 +272,12 @@ class CodeDescriptionWrapper(PreTrainedModel):
         self.pos_weight = pos_weight.detach().clone().float() if pos_weight is not None else None
         self.active_label_mask = torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
 
-    def forward(self, **inputs):
-        labels = inputs.get("labels", None)
-        model_inputs = {k: v for k, v in inputs.items() if k in ["input_ids", "attention_mask", "token_type_ids"]}
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, labels=None):
+        model_inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids
+        }
         outputs = self.base_encoder.base_model.base_model(**model_inputs, output_hidden_states=True)
 
         note_embeds = outputs.last_hidden_state[:, 0, :]

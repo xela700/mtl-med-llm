@@ -50,11 +50,21 @@ def classification_compute_metric(eval_preds):
     Returns:
         dict[str:float]: metrics based on evaluations
     """
-    logits, labels = eval_preds
+    if isinstance(eval_preds, tuple):
+        logits, labels = eval_preds
+    elif isinstance(eval_preds, dict):
+        logits, labels = eval_preds["logits"], eval_preds["labels"]
+    else:
+        logits, labels = eval_preds.predictions, eval_preds.label_ids
 
-    probs = torch.sigmoid(torch.tensor(logits)).numpy()
-    preds = (probs > 0.5).astype(int)
+    logits = torch.tensor(logits).detach().cpu().numpy()
     labels = np.array(labels)
+
+    logits = np.atleast_2d(logits)
+
+    with np.errstate(over="ignore"):
+        probs = 1 / (1 + np.exp(-logits))
+    preds = (probs > 0.5).astype(int)
 
     metrics = {}
 
@@ -70,8 +80,8 @@ def classification_compute_metric(eval_preds):
         metrics["roc_auc_macro"] = roc_auc_score(labels, preds, average="macro")
     except ValueError as ve:
         logger.error(f"ROC-AUC not computed: {ve}")
-        metrics["roc_auc_micro"] = None
-        metrics["roc_auc_macro"] = None
+        metrics["roc_auc_micro"] = float("nan")
+        metrics["roc_auc_macro"] = float("nan")
     
     return metrics
 
