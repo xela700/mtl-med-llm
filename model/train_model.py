@@ -9,7 +9,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
-from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback
+from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback, CUDACleanupCallback
 import torch
 import numpy as np
 import json
@@ -66,6 +66,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
     metrics_logger = MetricsLoggerCallback(output_dir=metric_dir)
 
     for run in range(run_number):
+        print(f"Beginning run {run + 1} out of {run_number}")
 
         config = AutoConfig.from_pretrained(checkpoint)
         config.num_labels = num_labels
@@ -75,7 +76,11 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
 
         tokenizer = AutoTokenizer.from_pretrained(checkpoint)
         model = AutoModelForSequenceClassification.from_pretrained(checkpoint, config=config)
-        data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+        data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True)
+
+        def collate_function(batch):
+            batch_filtered = [{k: v for k, v in sample.items() if k in ["input_ids", "attention_mask", "labels"] and v is not None} for sample in batch]
+            return data_collator(batch_filtered)
 
         lora_config = LoraConfig( # PERF tuning
             r=8,
@@ -91,14 +96,18 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         training_args = TrainingArguments(
             output_dir=training_checkpoint_dir,
             per_device_train_batch_size=8,
-            per_device_eval_batch_size=8,
+            per_device_eval_batch_size=2, # lowered batch size during eval (8 to 2)
+            eval_accumulation_steps=1, # flush intermediate evaluation results
             num_train_epochs=10,
             eval_strategy="epoch",
             save_strategy="epoch",
             logging_dir="./logs",
             load_best_model_at_end=True,
             metric_for_best_model="f1_macro",
-            greater_is_better=True
+            greater_is_better=True,
+            remove_unused_columns=False,
+            fp16=True, # Uses mixed precision
+            dataloader_pin_memory=False # Reduce memory overhead
         )
 
         pos_weight = compute_pos_weight(train_dataset)
@@ -123,11 +132,11 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
             processing_class=tokenizer,
-            data_collator=data_collator,
+            data_collator=collate_function,
             compute_metrics=classification_compute_metric,
             pos_weight=pos_weight,
             active_label_mask=mask,
-            callbacks=[metrics_logger]
+            callbacks=[metrics_logger, CUDACleanupCallback()] # callbacks for logging metrics and for clearing GPU memory for evaluation
         )
 
         trainer.train()
@@ -146,7 +155,7 @@ class WeightedLossTrainer(Trainer):
         super().__init__(model, args, data_collator, train_dataset, eval_dataset, processing_class, model_init, compute_loss_func, compute_metrics, callbacks, optimizers, optimizer_cls_and_kwargs, preprocess_logits_for_metrics)
                 
         self.pos_weight = (
-            torch.tensor(pos_weight, dtype=torch.float) if pos_weight is not None else None
+            pos_weight.detach().clone().float() if pos_weight is not None else None
         )
 
         self.active_label_mask = (
@@ -209,7 +218,6 @@ def compute_pos_weight(dataset: Dataset) -> Tensor:
     pos_weight = negative_counts / (positive_counts + 1e-5)
     return torch.tensor(pos_weight, dtype=torch.float32)
 
-
 def code_classification_model_setup(checkpoint, code_label_map, code_desc_map, label_embeddings_dir):
     try:
         with open(code_label_map) as f:
@@ -261,12 +269,13 @@ class CodeDescriptionWrapper(PreTrainedModel):
         super().__init__(config)
         self.base_encoder = base_encoder
         self.register_buffer("label_embeds", label_embeds)
-        self.pos_weight = torch.tensor(pos_weight, dtype=torch.float) if pos_weight is not None else None
+        self.pos_weight = pos_weight.detach().clone().float() if pos_weight is not None else None
         self.active_label_mask = torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
 
     def forward(self, **inputs):
         labels = inputs.get("labels", None)
-        outputs = self.base_encoder.base_model(**inputs)
+        model_inputs = {k: v for k, v in inputs.items() if k in ["input_ids", "attention_mask", "token_type_ids"]}
+        outputs = self.base_encoder.base_model.base_model(**model_inputs, output_hidden_states=True)
 
         note_embeds = outputs.last_hidden_state[:, 0, :]
         note_embeds = torch.nn.functional.normalize(note_embeds, dim=1)
@@ -281,18 +290,15 @@ class CodeDescriptionWrapper(PreTrainedModel):
                 pos_weight=self.pos_weight.to(logits.device) if self.pos_weight is not None else None,
                 reduction="none"
             )
-        loss_matrix = loss_function(logits, labels)
+            loss_matrix = loss_function(logits, labels)
 
-        if self.active_label_mask is not None:
-            mask = self.active_label_mask.to(logits.device)
-            loss_matrix = loss_matrix * mask
+            if self.active_label_mask is not None:
+                mask = self.active_label_mask.to(logits.device)
+                loss_matrix = loss_matrix * mask
         
-        loss = loss_matrix.mean()
+            loss = loss_matrix.mean()
         
-        return {
-            "loss": loss, 
-            "logits": logits, 
-            "hidden_states": outputs.hidden_states}
+        return {k: v for k, v in {"loss": loss, "logits": logits}.items() if v is not None}
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str) -> None:
     """

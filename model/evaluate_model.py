@@ -34,6 +34,12 @@ class MetricsLoggerCallback(TrainerCallback):
         with open(file_path, "w") as f:
             json.dump(metrics, f, indent=2)
 
+class CUDACleanupCallback(TrainerCallback):
+    def on_epoch_end(self, args, state, control, **kwargs):
+        torch.cuda.empty_cache()
+        print(f"\n[Memory Cleanup] GPU cache cleared at end of epoch {state.epoch:.0f}")
+        return control
+
 def classification_compute_metric(eval_preds):
     """
     Method for use in model training to evaluation performance. Includes accuracy, F1 (micro & macro), precision, recall, hamming loss and ROC-AUC (micro & macro)
