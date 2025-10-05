@@ -334,9 +334,9 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True, model=model, label_pad_token_id=-100, pad_to_multiple_of=8)
 
     lora_config = LoraConfig( # PERF tuning
-        r=8,
+        r=16,
         lora_alpha=16,
-        target_modules=["q_proj", "v_proj"],
+        target_modules="all-linear",
         lora_dropout=0.1,
         bias="none",
         task_type=TaskType.SEQ_2_SEQ_LM
