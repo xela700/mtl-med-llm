@@ -83,7 +83,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
             return data_collator(batch_filtered)
 
         lora_config = LoraConfig( # PERF tuning
-            r=16, # Increased rank from 8 to 16
+            r=8, # Increased rank from 8 to 16
             lora_alpha=16,
             target_modules=["query", "value", "dense"], # Modified to add "dense" layer targetting
             lora_dropout=0.1,
@@ -265,9 +265,30 @@ def encode_labels(descriptions, tokenizer, encoder, device):
 class CodeDescriptionWrapper(PreTrainedModel):
     config_class = AutoConfig
 
-    def __init__(self, config, base_encoder, label_embeds, pos_weight=None, active_label_mask=None):
+    def __init__(self, config, base_encoder, label_embeds, pos_weight=None, active_label_mask=None, proj_hidden=256):
         super().__init__(config)
         self.base_encoder = base_encoder
+        self.label_embeds = label_embeds
+
+        # Adding LoRA adapter layer to frozen encoder
+        lora_config = LoraConfig(
+            task_type=TaskType.FEATURE_EXTRACTION,
+            r=8,
+            lora_alpha=32,
+            lora_dropout=0.05,
+            target_modules=["query", "value"]
+        )
+        self.base_encoder = get_peft_model(self.base_encoder, lora_config)
+
+        hidden_dim = label_embeds.size(1)
+        self.proj = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim, proj_hidden),
+            torch.nn.GELU(),
+            torch.nn.Linear(proj_hidden, hidden_dim),
+            torch.nn.LayerNorm(hidden_dim)
+        )
+        # End LoRA setup
+
         self.register_buffer("label_embeds", label_embeds)
         self.pos_weight = pos_weight.detach().clone().float() if pos_weight is not None else None
         self.active_label_mask = torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
@@ -282,6 +303,11 @@ class CodeDescriptionWrapper(PreTrainedModel):
 
         note_embeds = outputs.last_hidden_state[:, 0, :]
         note_embeds = torch.nn.functional.normalize(note_embeds, dim=1)
+
+        # Projection
+        note_proj = self.proj(note_embeds)
+        note_proj = torch.nn.functional.normalize(note_proj, dim=1)
+        # End projection
         
         # Dot product logits between base encoder and frozen code desc encoder
         logits = torch.matmul(note_embeds, self.label_embeds.T)
