@@ -83,9 +83,9 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
             return data_collator(batch_filtered)
 
         lora_config = LoraConfig( # PERF tuning
-            r=8,
+            r=16, # Increased rank from 8 to 16
             lora_alpha=16,
-            target_modules=["query", "value"],
+            target_modules=["query", "value", "dense"], # Modified to add "dense" layer targetting
             lora_dropout=0.1,
             bias="none",
             task_type=TaskType.SEQ_CLS

@@ -74,3 +74,4 @@ model:
 
 results:
   classification_w_code: results/reporting/classification_w_code
+  classification_w_code_LORA_16: results/reporting/classification_w_code_LORA_16
