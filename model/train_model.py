@@ -268,18 +268,8 @@ class CodeDescriptionWrapper(PreTrainedModel):
     def __init__(self, config, base_encoder, label_embeds, pos_weight=None, active_label_mask=None, proj_hidden=256):
         super().__init__(config)
         self.base_encoder = base_encoder
-        self.label_embeds = label_embeds
 
-        # Adding LoRA adapter layer to frozen encoder
-        lora_config = LoraConfig(
-            task_type=TaskType.FEATURE_EXTRACTION,
-            r=8,
-            lora_alpha=32,
-            lora_dropout=0.05,
-            target_modules=["query", "value"]
-        )
-        self.base_encoder = get_peft_model(self.base_encoder, lora_config)
-
+        # Only doing MLP projection
         hidden_dim = label_embeds.size(1)
         self.proj = torch.nn.Sequential(
             torch.nn.Linear(hidden_dim, proj_hidden),
@@ -287,7 +277,7 @@ class CodeDescriptionWrapper(PreTrainedModel):
             torch.nn.Linear(proj_hidden, hidden_dim),
             torch.nn.LayerNorm(hidden_dim)
         )
-        # End LoRA setup
+        # End MLP projection
 
         self.register_buffer("label_embeds", label_embeds)
         self.pos_weight = pos_weight.detach().clone().float() if pos_weight is not None else None
