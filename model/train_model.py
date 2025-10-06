@@ -218,7 +218,17 @@ def compute_pos_weight(dataset: Dataset) -> Tensor:
     pos_weight = negative_counts / (positive_counts + 1e-5)
     return torch.tensor(pos_weight, dtype=torch.float32)
 
-def code_classification_model_setup(checkpoint, code_label_map, code_desc_map, label_embeddings_dir):
+def code_classification_model_setup(checkpoint: str, code_label_map: str, code_desc_map: str, label_embeddings_dir: str) -> None:
+    """
+    Creates label embeddings based on code descriptions for use during classification training.
+    Embeddings are created once and saved for reference during training.
+
+    Args:
+        checkpoint (str): checkpoint for the HF tokenizer/model
+        code_label_map (str): directory locaton for the label2id and id2label for the active labels
+        code_desc_map (str): directory location for the code: description map for active labels
+        label_embeddings_dir (str): directory where the embeddings will be saved
+    """
     try:
         with open(code_label_map) as f:
             mappings = json.load(f)
@@ -233,7 +243,18 @@ def code_classification_model_setup(checkpoint, code_label_map, code_desc_map, l
     except FileNotFoundError:
         logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
 
-    def check_description(code, code2desc):
+    def check_description(code: str, code2desc: dict[str:str]) -> str:
+        """
+        Small check to attempt to capture all relevant codes. Sometimes codes with a "0" at the end have
+        the character dropped. This attempts to account for that.
+
+        Args:
+            code (str): code being checked
+            code2desc (dict[str:str]): larger code dictionary with all active codes (and full code numbers)
+        
+        Returns:
+            str: code, if in the dict; code + 0, if in the dict with an added 0; 'No description available' if neither
+        """
         if code in code2desc:
             return code2desc[code]
         if (code + "0") in code2desc:
@@ -255,7 +276,19 @@ def code_classification_model_setup(checkpoint, code_label_map, code_desc_map, l
     label_embeds = encode_labels(descriptions=descriptions, tokenizer=tokenizer, encoder=frozen_encoder, device=device)
     torch.save(label_embeds.cpu(), label_embeddings_dir)
 
-def encode_labels(descriptions, tokenizer, encoder, device):
+def encode_labels(descriptions: list[str], tokenizer: AutoTokenizer, encoder: AutoModelForSequenceClassification, device: str) -> Tensor:
+        """
+        Encodes labels based on code descriptions using the same base encoder as for standard training.
+
+        Args:
+            descriptions (list[str]): List of code descriptions
+            tokenizer (AutoTokenizer): Tokenizer for the model
+            encoder (AutoModelForSequenceClassification): Same base model as the classification model
+            device (str): cuda or cpu
+        
+        Returns:
+            Tensor: a tensor of the normalized outputs; dimension size = 1
+        """
         inputs = tokenizer(descriptions, padding=True, truncation=True, return_tensors="pt").to(device)
         with torch.no_grad():
             outputs = encoder(**inputs)
@@ -263,9 +296,19 @@ def encode_labels(descriptions, tokenizer, encoder, device):
         return torch.nn.functional.normalize(pooled, dim=1)
 
 class CodeDescriptionWrapper(PreTrainedModel):
+    """
+    Wrapper designed for use with classification model training that incorporates the descriptions for each ICD-10 code.
+    Uses a mostly-static encoder separate from trainable base encoder, and computes logits using dot product similarity.
+
+    Attributes:
+        base_encoder (AutoModel): base model used in classification training
+        proj (nn.Sequential): sequence construction for the network
+        pos_weight: positive class weights
+        active_label_mask (Tensor): tensor of the mask for active labels (1.0 active; 0.0 inactive)
+    """
     config_class = AutoConfig
 
-    def __init__(self, config, base_encoder, label_embeds, pos_weight=None, active_label_mask=None, proj_hidden=256):
+    def __init__(self, config, base_encoder: AutoModelForSequenceClassification, label_embeds: Tensor, pos_weight: Tensor = None, active_label_mask: list[int] = None, proj_hidden: int = 256):
         super().__init__(config)
         self.base_encoder = base_encoder
 
@@ -283,23 +326,37 @@ class CodeDescriptionWrapper(PreTrainedModel):
         self.pos_weight = pos_weight.detach().clone().float() if pos_weight is not None else None
         self.active_label_mask = torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, labels=None):
+    def forward(self, input_ids: list[list[int]] = None, attention_mask: list[list[int]] = None, token_type_ids: list[int] = None, labels: Tensor = None) -> dict[float:list[float]]:
+        """
+        Forward pass conducted during training modified for use with code description encoder running on the base model.
+        Logits are reached by calculating the dot product similarity between the base encoder output and the code encoder.
+
+        Args:
+            input_ids (list[list[int]]): Input ids for the base encoder model
+            attention_mask (list[list[int]]): Attention mask for the base encoder model
+            token_type_ids (list[int]): Token type ids for the base encoder model
+            labels (Tensor): Labels for the model
+
+        Returns:
+            dict[float:list[float]]: Loss and logits calculated during forward pass
+        """
         model_inputs = {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "token_type_ids": token_type_ids
         }
+        # Outputs from trainable encoder model
         outputs = self.base_encoder.base_model.base_model(**model_inputs, output_hidden_states=True)
 
         note_embeds = outputs.last_hidden_state[:, 0, :]
         note_embeds = torch.nn.functional.normalize(note_embeds, dim=1)
 
-        # Projection
+        # Projection to align the embedding spaces of both base encoder and frozen encoder
         note_proj = self.proj(note_embeds)
         note_proj = torch.nn.functional.normalize(note_proj, dim=1)
         # End projection
         
-        # Dot product logits between base encoder and frozen code desc encoder
+        # Dot product logits between base encoder and frozen code desc label embeddings
         logits = torch.matmul(note_embeds, self.label_embeds.T)
 
         loss = None
