@@ -3,7 +3,8 @@ from sklearn.metrics import (
     precision_score, recall_score, roc_auc_score
 )
 from evaluate import load
-from transformers import TrainerCallback
+from transformers import TrainerCallback, AutoModelForSeq2SeqLM, AutoTokenizer
+from datasets import Dataset
 import json
 import os
 import numpy as np
@@ -14,6 +15,10 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 class MetricsLoggerCallback(TrainerCallback):
+    """
+    Custom HuggingFace Callback designed to save metrics during training after every epoch as
+    a new json file. Accounts for multiple training runs without overwritting data.
+    """
     
     def __init__(self, output_dir):
         super().__init__()
@@ -35,12 +40,16 @@ class MetricsLoggerCallback(TrainerCallback):
             json.dump(metrics, f, indent=2)
 
 class CUDACleanupCallback(TrainerCallback):
+    """
+    Custom HuggingFace Callback designed to release unoccupied GPU resources at the end of each
+    epoch. Hopefully minimizes OOM errors.
+    """
     def on_epoch_end(self, args, state, control, **kwargs):
         torch.cuda.empty_cache()
         print(f"\n[Memory Cleanup] GPU cache cleared at end of epoch {state.epoch:.0f}")
         return control
 
-def classification_compute_metric(eval_preds):
+def classification_compute_metric(eval_preds) -> dict[str:float]:
     """
     Method for use in model training to evaluation performance. Includes accuracy, F1 (micro & macro), precision, recall, hamming loss and ROC-AUC (micro & macro)
 
@@ -87,7 +96,7 @@ def classification_compute_metric(eval_preds):
 
 class SummarizationMetrics:
 
-    def __init__(self, tokenizer):
+    def __init__(self, tokenizer: AutoTokenizer):
         self.tokenizer = tokenizer
         self.rouge = load("rouge")
         self.bertscore = load("bertscore")
@@ -119,7 +128,7 @@ class SummarizationMetrics:
             "bertscore_f1": np.mean(bert_results["f1"]) * 100
         }
 
-def rouge_metrics(model, dataset, tokenizer, batch_size=8, device="cuda", max_gen_length=256):
+def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: AutoTokenizer, batch_size: int = 8, device: str = "cuda", max_gen_length: int = 256) -> dict[str:float]:
     """
     Used to evaluate the summarization model on ROUGE between epochs using the current checkpoint.
     Substitute for running evaluations during model training (GPU resource conservation)

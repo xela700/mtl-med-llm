@@ -357,7 +357,7 @@ class CodeDescriptionWrapper(PreTrainedModel):
         # End projection
         
         # Dot product logits between base encoder and frozen code desc label embeddings
-        logits = torch.matmul(note_embeds, self.label_embeds.T)
+        logits = torch.matmul(note_proj, self.label_embeds.T) # Fixed this - note_embeds -> note_proj
 
         loss = None
         if labels is not None:

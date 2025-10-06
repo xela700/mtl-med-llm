@@ -3,6 +3,7 @@ Script to extract metrics from training checkpoints.
 """
 
 from utils.config_loader import load_config
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import os
 import json
@@ -207,10 +208,103 @@ def intent_metrics() -> None:
     plt.show()
     plt.clf()
 
+def modified_metrics(root_dir: str, task: str) -> None:
+    """
+    Updated report summary function for creating graphs.
+
+    Args:
+        root_dir (str): path to the root directory with all of the metrics
+        task (str): task for which metrics are being retrieved/visualized (classification/summarization)
+
+    Returns:
+        None
+    """
+
+    metrics_dict = defaultdict(lambda: defaultdict(list))
+
+    for sub_dir in os.listdir(root_dir):
+        sub_dir_path = os.path.join(root_dir, sub_dir)
+
+        if not os.path.isdir(sub_dir_path):
+            continue
+
+        task_name = sub_dir.split("_")[0]
+        if task_name != task:
+            continue
+
+        method_type = "_".join(sub_dir.split("_")[1:])
+
+        for file in sorted(os.listdir(sub_dir_path)):
+            if not file.endswith(".json"):
+                continue
+
+            file_path = os.path.join(sub_dir_path, file)
+
+            try:
+                with open(file_path, "r") as f:
+                    data = json.load(f)
+                
+                if isinstance(data, dict) and "epoch" in data:
+                    for metric, value in data.items():
+                        if metric == "epoch":
+                            continue
+                        metrics_dict[method_type][metric].append((data["epoch"], value))
+                elif isinstance(data, list):
+                    for entry in data:
+                        epoch = entry.get("epoch")
+                        for metric, value in entry.items():
+                            if metric == "epoch":
+                                continue
+                            metrics_dict[method_type][metric].append((epoch, value))
+                else:
+                    continue
+            
+            except json.JSONDecodeError:
+                with open(file_path, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        entry = json.loads(line)
+                        epoch = entry.get("epoch")
+                        for metric, value in entry.items():
+                            if metric == "epoch":
+                                continue
+                            metrics_dict[method_type][metric].append((epoch, value))
+            
+            # epoch = int(''.join([c for c in file if c.isdigit()]))
+            # for metric, value in data.items():
+            #     metrics_dict[method_type][metric].append((epoch, value))
+    
+    for method in metrics_dict:
+        for metric in metrics_dict[method]:
+            metrics_dict[method][metric] = sorted(metrics_dict[method][metric], key=lambda x: x[0])
+
+    return metrics_dict
+
+def plot_metric(metric_dict, metric_type):
+    plt.figure(figsize=(8,5))
+
+    for method, metrics in metric_dict.items():
+        if metric_type not in metrics:
+            continue
+        epochs, values = zip(*metrics[metric_type])
+        plt.plot(epochs, values, marker="o", label=method)
+    
+    plt.xlabel("Epoch")
+    plt.ylabel(metric_type.upper())
+    plt.title(f"{metric_type.upper()} across epochs ({len(metric_dict)} methods)")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 if __name__ == "__main__":
-    classification_metrics()
+    # classification_metrics()
     # summarization_metrics()
     # intent_metrics()
+    metrics = modified_metrics("results/reporting", "summarization")
+    plot_metric(metrics, "rougeLsum")
+
 
 
 
