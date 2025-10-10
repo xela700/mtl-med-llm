@@ -6,7 +6,7 @@ from transformers import AutoModelForSequenceClassification, AutoModelForSeq2Seq
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
-from peft import get_peft_model, LoraConfig, TaskType
+from peft import get_peft_model, LoraConfig, TaskType, IA3Config
 from datasets import load_from_disk
 from data.fetch_data import load_data
 from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback, CUDACleanupCallback
@@ -81,6 +81,13 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         def collate_function(batch):
             batch_filtered = [{k: v for k, v in sample.items() if k in ["input_ids", "attention_mask", "labels"] and v is not None} for sample in batch]
             return data_collator(batch_filtered)
+        
+        ia3_config = IA3Config(
+            task_type=TaskType.SEQ_CLS,
+            target_modules=["query", "key", "value", "output.dense"],
+            feedforward_modules=["intermediate.dense"],
+            modules_to_save=None
+        )
 
         lora_config = LoraConfig( # PERF tuning
             r=8, # Increased rank from 8 to 16
@@ -91,7 +98,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
             task_type=TaskType.SEQ_CLS
         )
 
-        model = get_peft_model(model=model, peft_config=lora_config)
+        model = get_peft_model(model=model, peft_config=ia3_config)
 
         training_args = TrainingArguments(
             output_dir=training_checkpoint_dir,

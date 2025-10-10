@@ -224,7 +224,7 @@ def main(args: list[str]) -> None:
             model_weights_dir = config["model"]["classification_model_temp"] # modified to use fewer labels for initial training.
             training_checkpoints = config["model"]["classification_training_checkpoints_temp"] # modified to use fewer labels for initial training.
             test_data_dir = config["data"]["classification_test_data_temp"] # modified to use fewer labels for initial training.
-            metrics_dir = config["results"]["classification_w_code_w_MLP_LORA_a_32"]
+            metrics_dir = config["results"]["classification_w_code_IA3"]
             num_runs = args.num_runs
 
             classification_model_training(
@@ -260,7 +260,7 @@ def main(args: list[str]) -> None:
                 model_weights_dir = config["model"]["summarization_model"]
                 training_checkpoints = config["model"]["summarization_training_checkpoints"]
                 test_data_dir = config["data"]["summarization_test_data"]
-                metric_dir = config["results"]["summarization_LORA_a_32"]
+                metric_dir = f"results/reporting/summarization_LORA_a_32/summarization_rouge_results_run_{i+1}.json"
 
                 summarization_model_training(
                     data_dir=tokenized_data_dir,
