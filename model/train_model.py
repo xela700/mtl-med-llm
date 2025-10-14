@@ -84,7 +84,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         
         ia3_config = IA3Config(
             task_type=TaskType.SEQ_CLS,
-            target_modules=["query", "key", "value", "output.dense"],
+            target_modules=["query", "key", "value", "output.dense", "intermediate.dense"],
             feedforward_modules=["intermediate.dense"],
             modules_to_save=None
         )
@@ -422,7 +422,33 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         task_type=TaskType.SEQ_2_SEQ_LM
     )
 
-    model = get_peft_model(model, lora_config)
+    ia3_config = IA3Config(
+        target_modules=[
+            "encoder.layers.*.self_attn.k_proj",
+            "encoder.layers.*.self_attn.v_proj",
+            "encoder.layers.*.self_attn.q_proj",
+            "encoder.layers.*.self_attn.out_proj",
+    
+            "encoder.layers.*.fc1",
+            "encoder.layers.*.fc2",
+
+            "decoder.layers.*.self_attn.k_proj",
+            "decoder.layers.*.self_attn.v_proj",
+            "decoder.layers.*.self_attn.q_proj",
+            "decoder.layers.*.self_attn.out_proj",
+
+            "decoder.layers.*.encoder_attn.k_proj",
+            "decoder.layers.*.encoder_attn.v_proj",
+            "decoder.layers.*.encoder_attn.q_proj",
+            "decoder.layers.*.encoder_attn.out_proj",
+
+            "decoder.layers.*.fc1",
+            "decoder.layers.*.fc2",
+        ],
+        task_type=TaskType.SEQ_2_SEQ_LM
+    )
+
+    model = get_peft_model(model, ia3_config)
     model.to("cuda")
 
     training_args = Seq2SeqTrainingArguments(
