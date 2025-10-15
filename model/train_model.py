@@ -90,15 +90,15 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         )
 
         lora_config = LoraConfig( # PERF tuning
-            r=8, # Increased rank from 8 to 16
-            lora_alpha=32, # doubled from 16 to 32
-            target_modules=["query", "value"], # Modified to add "dense" layer targetting
-            lora_dropout=0.1,
+            r=32, # Increased rank from 8
+            lora_alpha=64, # quadrupled from 16 to 64
+            target_modules=["query", "value"],
+            lora_dropout=0.05, # Lowered from 0.1
             bias="none",
             task_type=TaskType.SEQ_CLS
         )
 
-        model = get_peft_model(model=model, peft_config=ia3_config)
+        model = get_peft_model(model=model, peft_config=lora_config)
 
         training_args = TrainingArguments(
             output_dir=training_checkpoint_dir,
@@ -423,28 +423,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     )
 
     ia3_config = IA3Config(
-        target_modules=[
-            "encoder.layers.*.self_attn.k_proj",
-            "encoder.layers.*.self_attn.v_proj",
-            "encoder.layers.*.self_attn.q_proj",
-            "encoder.layers.*.self_attn.out_proj",
-    
-            "encoder.layers.*.fc1",
-            "encoder.layers.*.fc2",
-
-            "decoder.layers.*.self_attn.k_proj",
-            "decoder.layers.*.self_attn.v_proj",
-            "decoder.layers.*.self_attn.q_proj",
-            "decoder.layers.*.self_attn.out_proj",
-
-            "decoder.layers.*.encoder_attn.k_proj",
-            "decoder.layers.*.encoder_attn.v_proj",
-            "decoder.layers.*.encoder_attn.q_proj",
-            "decoder.layers.*.encoder_attn.out_proj",
-
-            "decoder.layers.*.fc1",
-            "decoder.layers.*.fc2",
-        ],
+        target_modules="all-linear",
         task_type=TaskType.SEQ_2_SEQ_LM
     )
 

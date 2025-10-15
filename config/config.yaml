@@ -78,3 +78,4 @@ results:
   classification_w_code_w_MLP: results/reporting/classification_w_code_w_MLP
   classification_w_code_w_MLP_LORA_a_32: results/reporting/classification_w_code_MLP_LORA_a_32
   classification_w_code_IA3: results/reporting/classification_w_code_IA3
+  classification_w_code_LORA_High_Cap: results/reporting/classification_w_code_LORA_High_Cap
