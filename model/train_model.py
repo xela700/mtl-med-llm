@@ -2,7 +2,7 @@
 Module to set up training tasks for all NLP models.
 """
 
-from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, PreTrainedModel, AutoModel
+from transformers import AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, PreTrainedModel, AutoModel, BartForConditionalGeneration
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
@@ -90,10 +90,10 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         )
 
         lora_config = LoraConfig( # PERF tuning
-            r=32, # Increased rank from 8
-            lora_alpha=64, # quadrupled from 16 to 64
+            r=8, # Increased rank from 8
+            lora_alpha=16, # quadrupled from 16 to 64
             target_modules=["query", "value"],
-            lora_dropout=0.05, # Lowered from 0.1
+            lora_dropout=0.1, # Lowered from 0.1
             bias="none",
             task_type=TaskType.SEQ_CLS
         )
@@ -321,9 +321,13 @@ class CodeDescriptionWrapper(PreTrainedModel):
 
         # Only doing MLP projection
         hidden_dim = label_embeds.size(1)
-        self.proj = torch.nn.Sequential(
+        self.proj = torch.nn.Sequential( # Modified hidden dimension to stack more layers to see if that improves training
             torch.nn.Linear(hidden_dim, proj_hidden),
             torch.nn.GELU(),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(proj_hidden, proj_hidden),
+            torch.nn.GELU(),
+            torch.nn.Dropout(0.2),
             torch.nn.Linear(proj_hidden, hidden_dim),
             torch.nn.LayerNorm(hidden_dim)
         )
@@ -410,14 +414,14 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     test_dataset.save_to_disk(test_data_dir)
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint, model_max_length=1024)
-    model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint, torch_dtype=torch.float16)
+    model = Seq2SeqWProjection(checkpoint=checkpoint) # modified to use projection head
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True, model=model, label_pad_token_id=-100, pad_to_multiple_of=8)
 
     lora_config = LoraConfig( # PERF tuning
-        r=32, # 8 -> 32
-        lora_alpha=64, # changed from 16 to 64
+        r=8, # 8 -> 32
+        lora_alpha=16, # changed from 16 to 64
         target_modules="all-linear",
-        lora_dropout=0.05, # 0.1 -> 0.05
+        lora_dropout=0.1, # 0.1 -> 0.05
         bias="none",
         task_type=TaskType.SEQ_2_SEQ_LM
     )
@@ -444,6 +448,11 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         predict_with_generate=False,
         fp16=True
     )
+
+    # Modification to ensure only adapter parameters and projection head are being trained
+    for name, param in model.named_parameters():
+        if not any(k in name for k in ["lora_", "proj"]):
+            param.requires_grad = False
 
     trainer = Seq2SeqTrainer(
         model=model,
@@ -474,6 +483,38 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
 
     model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
+
+class Seq2SeqWProjection(torch.nn.Module):
+    """
+    Class to add a small projection head to summarization model during training.
+    """
+    def __init__(self, checkpoint):
+        super().__init__()
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint, torch_dtype=torch.float16)
+        hidden_size = self.model.config.d_model
+        self.proj = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, hidden_size // 2),
+            torch.nn.GELU(),
+            torch.nn.Dropout(0.1),
+            torch.nn.Linear(hidden_size // 2, hidden_size)
+        )
+    
+    def forward(self, *args, **kwargs):
+        outputs = self.model.model(**kwargs, output_hidden_states=True)
+        last_hidden = outputs.decoder_hidden_states[-1]
+        projected = self.proj(last_hidden)
+
+        logits = self.model.lm_head(projected) + self.model.final_logits_bias
+
+        loss = None
+        if "labels" in kwargs and kwargs["labels"] is not None:
+            loss_function = torch.nn.CrossEntropyLoss(ignore_index=-100)
+            loss = loss_function(
+                logits.view(-1, logits.size(-1)),
+                kwargs["labels"].view(-1)
+            )
+        
+        return {"loss": loss, "logits": logits}
 
 
 def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
