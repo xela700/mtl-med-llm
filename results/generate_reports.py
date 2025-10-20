@@ -302,8 +302,8 @@ if __name__ == "__main__":
     # classification_metrics()
     # summarization_metrics()
     # intent_metrics()
-    metrics = modified_metrics("results/reporting", "summarization")
-    plot_metric(metrics, "rougeLsum")
+    metrics = modified_metrics("results/reporting", "classification")
+    plot_metric(metrics, "eval_roc_auc_micro")
 
 
 
