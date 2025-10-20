@@ -414,7 +414,8 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     test_dataset.save_to_disk(test_data_dir)
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint, model_max_length=1024)
-    model = Seq2SeqWProjection(checkpoint=checkpoint) # modified to use projection head
+    config = AutoConfig.from_pretrained(checkpoint)
+    model = Seq2SeqWProjection.from_pretrained(checkpoint, config=config, torch_dtype=torch.float16) # modified to use projection head
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True, model=model, label_pad_token_id=-100, pad_to_multiple_of=8)
 
     lora_config = LoraConfig( # PERF tuning
@@ -484,14 +485,13 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
 
-class Seq2SeqWProjection(torch.nn.Module):
+class Seq2SeqWProjection(AutoModelForSeq2SeqLM):
     """
     Class to add a small projection head to summarization model during training.
     """
-    def __init__(self, checkpoint):
-        super().__init__()
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint, torch_dtype=torch.float16)
-        hidden_size = self.model.config.d_model
+    def __init__(self, config):
+        super().__init__(config)
+        hidden_size = config.d_model
         self.proj = torch.nn.Sequential(
             torch.nn.Linear(hidden_size, hidden_size // 2),
             torch.nn.GELU(),
@@ -499,22 +499,26 @@ class Seq2SeqWProjection(torch.nn.Module):
             torch.nn.Linear(hidden_size // 2, hidden_size)
         )
     
-    def forward(self, *args, **kwargs):
-        outputs = self.model.model(**kwargs, output_hidden_states=True)
+    def forward(self, input_ids=None, attention_mask=None, decoder_input_ids=None, decoder_attention_mask=None, labels=None, **kwargs):
+        outputs = super().forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask,
+            output_hidden_states=True,
+            **kwargs
+        )
         last_hidden = outputs.decoder_hidden_states[-1]
         projected = self.proj(last_hidden)
 
-        logits = self.model.lm_head(projected) + self.model.final_logits_bias
+        logits = self.lm_head(projected) + self.model.final_logits_bias
 
         loss = None
-        if "labels" in kwargs and kwargs["labels"] is not None:
+        if labels is not None:
             loss_function = torch.nn.CrossEntropyLoss(ignore_index=-100)
-            loss = loss_function(
-                logits.view(-1, logits.size(-1)),
-                kwargs["labels"].view(-1)
-            )
+            loss = loss_function(logits.view(-1, logits.size(-1)), labels.view(-1))
         
-        return {"loss": loss, "logits": logits}
+        return {"loss": loss, "logits": logits, "past_key_values": outputs.past_key_values}
 
 
 def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
