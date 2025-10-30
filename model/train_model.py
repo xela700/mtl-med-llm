@@ -10,6 +10,7 @@ from peft import get_peft_model, LoraConfig, TaskType, IA3Config
 from datasets import load_from_disk
 from data.fetch_data import load_data
 from model.evaluate_model import classification_compute_metric, SummarizationMetrics, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback, CUDACleanupCallback
+from model.mixture_of_experts import MoEProjectionLayer
 import torch
 import numpy as np
 import json
@@ -321,16 +322,18 @@ class CodeDescriptionWrapper(PreTrainedModel):
 
         # Only doing MLP projection
         hidden_dim = label_embeds.size(1)
-        self.proj = torch.nn.Sequential( # Modified hidden dimension to stack more layers to see if that improves training
-            torch.nn.Linear(hidden_dim, proj_hidden),
-            torch.nn.GELU(),
-            torch.nn.Dropout(0.2),
-            torch.nn.Linear(proj_hidden, proj_hidden),
-            torch.nn.GELU(),
-            torch.nn.Dropout(0.2),
-            torch.nn.Linear(proj_hidden, hidden_dim),
-            torch.nn.LayerNorm(hidden_dim)
-        )
+        # self.proj = torch.nn.Sequential( # Modified hidden dimension to stack more layers to see if that improves training
+        #     torch.nn.Linear(hidden_dim, proj_hidden),
+        #     torch.nn.GELU(),
+        #     torch.nn.Dropout(0.2),
+        #     torch.nn.Linear(proj_hidden, proj_hidden),
+        #     torch.nn.GELU(),
+        #     torch.nn.Dropout(0.2),
+        #     torch.nn.Linear(proj_hidden, hidden_dim),
+        #     torch.nn.LayerNorm(hidden_dim)
+        # )
+
+        self.proj = MoEProjectionLayer(hidden_dim, proj_hidden, num_experts=4, top_k=2, dropout=0.2)
         # End MLP projection
 
         self.register_buffer("label_embeds", label_embeds)
