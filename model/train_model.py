@@ -124,7 +124,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         device = "cuda" if torch.cuda.is_available() else "cpu"
         base_encoder = model
         label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
-        model = CodeDescriptionWrapper(
+        model = TrainableCodeDescriptionWrapper(
             config=config, 
             base_encoder=base_encoder, 
             label_embeds=label_embeds,
@@ -389,6 +389,111 @@ class CodeDescriptionWrapper(PreTrainedModel):
             loss = loss_matrix.mean()
         
         return {k: v for k, v in {"loss": loss, "logits": logits}.items() if v is not None}
+
+class TrainableCodeDescriptionWrapper(PreTrainedModel):
+    """
+    Modified wrapper class for classification using note embeddings that also includes a trainable
+    adapter to reshape frozen label embedding space in an attempt to overcome potential bottlenecks.
+    """
+
+    config_class = AutoConfig
+
+    def __init__(
+            self,
+            config,
+            base_encoder : AutoModelForSequenceClassification,
+            label_embeds: Tensor,
+            pos_weight: Tensor = None,
+            active_label_mask: list[int] = None,
+            proj_hidden: int = 256,
+            adapter_init_scale: float = 0.01,
+    ):
+        super().__init__(config)
+        self.base_encoder = base_encoder
+
+        # Projection head
+        hidden_dim = label_embeds.size(1)
+        self.proj = torch.nn.Sequential( # Modified hidden dimension to stack more layers to see if that improves training
+            torch.nn.Linear(hidden_dim, proj_hidden),
+            torch.nn.GELU(),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(proj_hidden, proj_hidden),
+            torch.nn.GELU(),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(proj_hidden, hidden_dim),
+            torch.nn.LayerNorm(hidden_dim)
+        )
+
+        self.register_buffer("label_embeds", label_embeds) # label embeddings
+
+        # Trainable adapter for labels
+        self.label_adapter = torch.nn.Linear(hidden_dim, hidden_dim, bias=False)
+        torch.nn.init.eye_(self.label_adapter.weight) # starts at identity
+        self.label_adapter.weight.data += adapter_init_scale * torch.randn_like(self.label_adapter.weight.data)
+        # End new trainable adapter
+
+        self.pos_weight = (
+            pos_weight.detach().clone().float() if pos_weight is not None else None
+        )
+        self.active_label_mask = (
+            torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
+        )
+
+    def forward(self, input_ids: list[list[int]] = None, attention_mask: list[list[int]] = None, token_type_ids: list[int] = None, labels: Tensor = None) -> dict[float:list[float]]:
+        """
+        Forward pass conducted during training modified for use with code description encoder running on the base model.
+        Logits are reached by calculating the dot product similarity between the base encoder output and the code encoder.
+
+        Args:
+            input_ids (list[list[int]]): Input ids for the base encoder model
+            attention_mask (list[list[int]]): Attention mask for the base encoder model
+            token_type_ids (list[int]): Token type ids for the base encoder model
+            labels (Tensor): Labels for the model
+
+        Returns:
+            dict[float:list[float]]: Loss and logits calculated during forward pass
+        """
+        model_inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+        }
+
+        # Outputs from trainable encoder model
+        outputs = self.base_encoder.base_model.base_model(**model_inputs, output_hidden_states=True)
+
+        note_embeds = outputs.last_hidden_state[:, 0, :]
+        note_embeds = torch.nn.functional.normalize(note_embeds, dim=1)
+
+        # Projection to align the embedding spaces of both base encoder and frozen encoder
+        note_proj = self.proj(note_embeds)
+        note_proj = torch.nn.functional.normalize(note_proj, dim=1)
+        # End projection
+
+        # Adapter label embeddings
+        adapted_labels = self.label_adapter(self.label_embeds)
+        adapted_labels = torch.nn.functional.normalize(adapted_labels, dim=1)
+
+        logits = torch.matmul(note_proj, adapted_labels.T)
+
+        loss = None
+        if labels is not None:
+            labels = labels.float().to(logits.device)
+            loss_function = torch.nn.BCEWithLogitsLoss(
+                pos_weight=self.pos_weight.to(logits.device) if self.pos_weight is not None else None,
+                reduction="none"
+            )
+            loss_matrix = loss_function(logits, labels)
+
+            if self.active_label_mask is not None:
+                mask = self.active_label_mask.to(logits.device)
+                loss_matrix = loss_matrix * mask
+        
+            loss = loss_matrix.mean()
+        
+        return {k: v for k, v in {"loss": loss, "logits": logits}.items() if v is not None}
+
+
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str) -> None:
     """
