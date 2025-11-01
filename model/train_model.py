@@ -106,7 +106,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
             per_device_train_batch_size=8,
             per_device_eval_batch_size=2, # lowered batch size during eval (8 to 2)
             eval_accumulation_steps=1, # flush intermediate evaluation results
-            num_train_epochs=10,
+            num_train_epochs=15,
             eval_strategy="epoch",
             save_strategy="epoch",
             logging_dir="./logs",
@@ -124,7 +124,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         device = "cuda" if torch.cuda.is_available() else "cpu"
         base_encoder = model
         label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
-        model = TrainableCodeDescriptionWrapper(
+        model = CodelessWrapper(
             config=config, 
             base_encoder=base_encoder, 
             label_embeds=label_embeds,
@@ -493,6 +493,93 @@ class TrainableCodeDescriptionWrapper(PreTrainedModel):
         
         return {k: v for k, v in {"loss": loss, "logits": logits}.items() if v is not None}
 
+class CodelessWrapper(PreTrainedModel):
+    """
+    Modified wrapper for classification model that omits dot product similarity calculations with model outputs.
+    Created to confirm if the code description embeddings are creating a bottleneck.
+    Maintains projection head setup (either individual or MoE)
+    """
+
+    config_class = AutoConfig
+
+    def __init__(
+            self,
+            config,
+            base_encoder: AutoModelForSequenceClassification,
+            num_labels: int,
+            pos_weight: Tensor = None,
+            active_label_mask: list[int] = None,
+            proj_hidden: int = 256,
+    ):
+        super().__init__(config)
+        self.base_encoder = base_encoder
+        hidden_dim = base_encoder.config.hidden_size
+
+        self.proj = MoEProjectionLayer(
+            input_dim=hidden_dim,
+            hidden_dim=proj_hidden,
+            num_experts=4,
+            top_k=2,
+            dropout=0.2
+        )
+
+        self.classifier = torch.nn.Linear(hidden_dim, num_labels) # classifier head
+
+        self.pos_weight = (
+            pos_weight.detach().clone().float() if pos_weight is not None else None
+        )
+        self.active_label_mask = (
+            torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
+        )
+
+    def forward(self, input_ids: list[list[int]] = None, attention_mask: list[list[int]] = None, token_type_ids: list[int] = None, labels: Tensor = None) -> dict[float:list[float]]:
+        """
+        Forward pass that incorporates projection head (singular or MoE).
+
+        Args:
+            input_ids (list[list[int]]): Input ids for the base encoder model
+            attention_mask (list[list[int]]): Attention mask for the base encoder model
+            token_type_ids (list[int]): Token type ids for the base encoder model
+            labels (Tensor): Labels for the model
+
+        Returns:
+            dict[float:list[float]]: Loss and logits calculated during forward pass
+        """
+        model_inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+        }
+
+        # Outputs from trainable encoder model
+        outputs = self.base_encoder.base_model.base_model(**model_inputs, output_hidden_states=True)
+
+        note_embeds = outputs.last_hidden_state[:, 0, :]
+        note_embeds = torch.nn.functional.normalize(note_embeds, dim=1)
+
+        # Projection to align the embedding spaces of both base encoder and frozen encoder
+        proj_embeds = self.proj(note_embeds)
+        proj_embeds = torch.nn.functional.normalize(proj_embeds, dim=1)
+        # End projection
+
+        logits = self.classifier(proj_embeds)
+
+        loss = None
+        if labels is not None:
+            labels = labels.float().to(logits.device)
+            loss_function = torch.nn.BCEWithLogitsLoss(
+                pos_weight=self.pos_weight.to(logits.device) if self.pos_weight is not None else None,
+                reduction="none"
+            )
+            loss_matrix = loss_function(logits, labels)
+
+            if self.active_label_mask is not None:
+                mask = self.active_label_mask.to(logits.device)
+                loss_matrix = loss_matrix * mask
+        
+            loss = loss_matrix.mean()
+        
+        return {k: v for k, v in {"loss": loss, "logits": logits}.items() if v is not None}
 
 
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str) -> None:
