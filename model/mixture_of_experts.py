@@ -1,3 +1,7 @@
+"""
+Module to create Mixture-of-Experts architecture for LLM training.
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
