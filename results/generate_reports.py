@@ -282,7 +282,7 @@ def modified_metrics(root_dir: str, task: str) -> None:
 
     return metrics_dict
 
-def plot_metric(metric_dict, metric_type):
+def plot_metric(metric_dict: str, metric_type: str, legend_loc: str="best", legend_font: str="medium") -> None:
     plt.figure(figsize=(8,5))
 
     for method, metrics in metric_dict.items():
@@ -294,7 +294,7 @@ def plot_metric(metric_dict, metric_type):
     plt.xlabel("Epoch")
     plt.ylabel(metric_type.upper())
     plt.title(f"{metric_type.upper()} across epochs ({len(metric_dict)} methods)")
-    plt.legend()
+    plt.legend(loc=legend_loc, fontsize=legend_font)
     plt.grid(True)
     plt.show()
 
@@ -302,8 +302,8 @@ if __name__ == "__main__":
     # classification_metrics()
     # summarization_metrics()
     # intent_metrics()
-    metrics = modified_metrics("results/reporting", "classification")
-    plot_metric(metrics, "eval_loss")
+    metrics = modified_metrics("results/reporting", "classification2")
+    plot_metric(metrics, "eval_loss", legend_font="x-small")
 
 
 
