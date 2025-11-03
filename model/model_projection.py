@@ -120,16 +120,17 @@ class TrainableCodeDescriptionWrapper(PreTrainedModel):
 
         # Projection head
         hidden_dim = label_embeds.size(1)
-        self.proj = torch.nn.Sequential( # Modified hidden dimension to stack more layers to see if that improves training
-            torch.nn.Linear(hidden_dim, proj_hidden),
-            torch.nn.GELU(),
-            torch.nn.Dropout(0.2),
-            torch.nn.Linear(proj_hidden, proj_hidden),
-            torch.nn.GELU(),
-            torch.nn.Dropout(0.2),
-            torch.nn.Linear(proj_hidden, hidden_dim),
-            torch.nn.LayerNorm(hidden_dim)
-        )
+        # self.proj = torch.nn.Sequential( # Modified hidden dimension to stack more layers to see if that improves training
+        #     torch.nn.Linear(hidden_dim, proj_hidden),
+        #     torch.nn.GELU(),
+        #     torch.nn.Dropout(0.2),
+        #     torch.nn.Linear(proj_hidden, proj_hidden),
+        #     torch.nn.GELU(),
+        #     torch.nn.Dropout(0.2),
+        #     torch.nn.Linear(proj_hidden, hidden_dim),
+        #     torch.nn.LayerNorm(hidden_dim)
+        # )
+        self.proj = MoEProjectionLayer(hidden_dim, proj_hidden, num_experts=4, top_k=2, dropout=0.2)
 
         self.register_buffer("label_embeds", label_embeds) # label embeddings
 
