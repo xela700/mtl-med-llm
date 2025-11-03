@@ -4,7 +4,7 @@ Moved from train_model script.
 """
 
 import torch
-from mixture_of_experts import MoEProjectionLayer
+from model.mixture_of_experts import MoEProjectionLayer
 from transformers import PreTrainedModel, AutoConfig, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
 from torch import Tensor
 
@@ -130,7 +130,7 @@ class TrainableCodeDescriptionWrapper(PreTrainedModel):
         #     torch.nn.Linear(proj_hidden, hidden_dim),
         #     torch.nn.LayerNorm(hidden_dim)
         # )
-        self.proj = MoEProjectionLayer(hidden_dim, proj_hidden, num_experts=4, top_k=2, dropout=0.2)
+        self.proj = MoEProjectionLayer(hidden_dim, proj_hidden, num_experts=8, top_k=4, dropout=0.2)
 
         self.register_buffer("label_embeds", label_embeds) # label embeddings
 

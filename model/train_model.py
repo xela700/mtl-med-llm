@@ -126,8 +126,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
         model = TrainableCodeDescriptionWrapper(
             config=config, 
-            base_encoder=base_encoder, 
-            num_labels=num_labels,
+            base_encoder=base_encoder,
             pos_weight=pos_weight,
             active_label_mask=mask,
             label_embeds=label_embeds
