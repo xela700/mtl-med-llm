@@ -842,23 +842,36 @@ class IntentTargetingPreprocessor(TextPreprocessor):
     def __init__(self, checkpoint, text_col, cleaned_path, remove_sections = None):
         super().__init__(checkpoint, text_col, cleaned_path, remove_sections)
         self.intent_prompts = {
-            "summarizaton": [
-                "Summarize these notes:\n",
-                "Write a short summary of the following:\n",
-                "Can you provide a brief summary?\n",
-                "Give me a brief description of this patient's visit:\n",
-                "Can you shorten the following?\n",
-                "Describe these clinical notes:\n",
-                "How would you describe the patient's visit?\n"
+            "summarization": [
+                "Summarize these notes:",
+                "Write a short summary of the following:",
+                "Can you provide a brief summary?",
+                "Give me a brief description of this patient's visit:",
+                "Can you shorten the following?",
+                "Describe these clinical notes:",
+                "How would you describe the patient's visit?",
+                "Based on this note, what happened?",
+                "What is the key takeaway from this note?",
+                "Describe the main points for this:"
             ],
             "classification": [
-                "Classify this note:\n",
-                "What ICD codes relate to this patient's visit?\n",
-                "Determine ICD codes based on the following text:\n",
-                "Codes associated with patient\n",
-                "Potential diagnosis for the following patient:\n",
-                "Please identify ICD codes for this visit:\n",
-                "ICD codes from note:\n"
+                "Classify this note:",
+                "What ICD codes relate to this patient's visit?",
+                "Determine ICD codes based on the following text:",
+                "Codes associated with patient",
+                "Potential diagnosis for the following patient:",
+                "Please identify ICD codes for this visit:",
+                "ICD codes from note:",
+                "What labels should be assigned here?",
+                "Assign suitable categories for this note:",
+                "What labels would you apply to this patient's visit?"
+            ],
+            "neutral": [
+                "Process the following input:",
+                "Review the text below:",
+                "Consider the following note:",
+                "Analyze this record:",
+                "Read the following:"
             ]
         }
         self.label2id = None
@@ -866,19 +879,31 @@ class IntentTargetingPreprocessor(TextPreprocessor):
 
     def prepend_random_prompt(self, sample: str) -> str:
         """
-        Prepends a random intent prompt to the text based on intent. Intents initialized with the class.
-        Part of subclass' preprocess function.
+        Modified prepending function that provides the opportunity to add neutral prompts, opposite prompts, or no prompt at all.
+        Intended to help with model's ability to generalize.
 
         Args:
             sample (str): Individual text with an associated intent.
 
         Returns:
-            str: Same text with a random prompt prepended.
+            str: Same text with a random prompt prepended or the same text
         """
-        intent = sample["label"]
-        prompts = self.intent_prompts.get(intent, [""])
-        prompt = random.choice(prompts)
-        return prompt + sample[self.text_col]
+        label = sample["label"]
+
+        if random.random() < 0.7: # 70% chance to add a prompt
+            choice_type = random.random()
+            # If prompt prepended, 50% chance to match with appropriate prompt, 25% for neutral prompt, and 25% for opposite prompt
+            if choice_type < 0.5:
+                pool = self.intent_prompts[label]
+            elif choice_type < 0.75:
+                pool = self.intent_prompts["neutral"]
+            else:
+                opposite = "classification" if label == "summarization" else "summarization"
+                pool = self.intent_prompts[opposite]
+            prompt = random.choice(pool)
+            return f"{prompt} {sample[self.text_col]}"
+        else:
+            return sample[self.text_col]
 
     def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
         """
@@ -927,9 +952,13 @@ class IntentTargetingPreprocessor(TextPreprocessor):
             dataframe.rename(columns={self.text_col: "input"}, inplace=True)
             self.text_col = "input"
         
-        half_df = dataframe.sample(frac=0.5, random_state=42).index
+        dataframe["label"] = dataframe["input"].apply(
+            lambda _: random.choice(["classification", "summarization"])
+        )
+        
+        # half_df = dataframe.sample(frac=0.5, random_state=42).index
 
-        dataframe["label"] = np.where(dataframe.index.isin(half_df), "classification", "summarization")
+        # dataframe["label"] = np.where(dataframe.index.isin(half_df), "classification", "summarization")
 
         lable_encoder = LabelEncoder()
         lable_encoder.fit(dataframe["label"])
