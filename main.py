@@ -128,7 +128,7 @@ def main(args: list[str]) -> None:
                 intent_data = load_data(config["data"]["task_4"]["data_path"])
             else:
                 base_data = load_data(config["data"]["task_3"]["data_path"])
-                intent_data = base_data.sample(n=5000, random_state=42) # Don't need thousands of samples to train small intent targeting model at this time.
+                intent_data = base_data.sample(n=5000, random_state=42)
                 intent_data.to_parquet(intent_path)
             
             train_df, test_df = train_test_split(intent_data, test_size=0.2, random_state=42)
@@ -298,6 +298,7 @@ def main(args: list[str]) -> None:
             checkpoint = config["model"]["intent_checkpoint"]
             model_weights_dir = config["model"]["intent_model"]
             training_checkpoints = config["model"]["intent_training_checkpoints"]
+            metric_dir = config["results"]["intent_targeting"]
 
             intent_model_training(
                 train_data_dir=train_tokenized_data_dir,

@@ -403,7 +403,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     tokenizer.save_pretrained(save_dir)
 
 
-def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
+def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, metric_dir: str) -> None:
     """
     Training pipeline for intent targeting (between classification and summarization for now).
 
@@ -441,6 +441,8 @@ def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
+    metrics_logger = MetricsLoggerCallback(output_dir=metric_dir)
+
     training_args = TrainingArguments(
         output_dir=training_checkpoint_dir,
         eval_strategy="epoch",
@@ -448,7 +450,7 @@ def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str
         logging_strategy="epoch",
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
-        num_train_epochs=3,
+        num_train_epochs=10,
         learning_rate=2e-5,
         weight_decay=0.01,
         load_best_model_at_end=True,
@@ -462,7 +464,8 @@ def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        compute_metrics=intent_compute_metrics
+        compute_metrics=intent_compute_metrics,
+        callbacks=[metrics_logger]
     )
 
     trainer.train()
