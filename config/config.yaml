@@ -44,6 +44,9 @@ data:
     description: "Data related to intent targeting for classification/summarization. Can use portion of base data from task_3."
     data_path: data/raw_data/intent_data.parquet
     tokenized_path: data/cleaned_data/intent_dataset_tokenized
+    train_tokenized_path: data/cleaned_data/intent_dataset_tokenized_training
+    val_tokenized_path: data/cleaned_data/intent_dataset_tokenized_val
+    test_tokenized_path: data/cleaned_data/intent_dataset_tokenized_test
   
   task_5:
     description: "Data related to code encoder for classification task. Contains 'code: description' style data."

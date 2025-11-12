@@ -403,7 +403,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     tokenizer.save_pretrained(save_dir)
 
 
-def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
+def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
     """
     Training pipeline for intent targeting (between classification and summarization for now).
 
@@ -417,11 +417,12 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
         None
     """
 
-    dataset = Dataset.load_from_disk(data_dir)
+    train_dataset = Dataset.load_from_disk(train_data_dir)
+    val_dataset = Dataset.load_from_disk(val_data_dir)
 
-    dataset = dataset.train_test_split(test_size=0.2)
-    train_dataset = dataset["train"]
-    test_dataset = dataset["test"]
+    # dataset = dataset.train_test_split(test_size=0.2)
+    # train_dataset = dataset["train"]
+    # test_dataset = dataset["test"]
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
@@ -458,7 +459,7 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=intent_compute_metrics

@@ -18,6 +18,7 @@ from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
 from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor, CodePreprocessor
 from model.train_model import classification_model_training, summarization_model_training, intent_model_training, code_classification_model_setup
+from sklearn.model_selection import train_test_split
 
 logger = logging.getLogger(__name__)
 
@@ -121,23 +122,42 @@ def main(args: list[str]) -> None:
             preprocessor.preprocess(base_data, save_dir=model_save_dir)
         
         elif args.target == "intent_targeting":
+            # Modification to split data prior to preprocessing to avoid data leakage. Also upped samples to 5000 from 300.
             intent_path = config["data"]["task_4"]["data_path"]
             if os.path.exists(intent_path):
                 intent_data = load_data(config["data"]["task_4"]["data_path"])
             else:
                 base_data = load_data(config["data"]["task_3"]["data_path"])
-                intent_data = base_data.sample(n=300, random_state=42) # Don't need thousands of samples to train small intent targeting model at this time.
+                intent_data = base_data.sample(n=5000, random_state=42) # Don't need thousands of samples to train small intent targeting model at this time.
                 intent_data.to_parquet(intent_path)
             
-            checkpoint = config["model"]["intent_checkpoint"]
-            clean_path = config["data"]["task_4"]["tokenized_path"]
+            train_df, test_df = train_test_split(intent_data, test_size=0.2, random_state=42)
+            train_df, val_df = train_test_split(train_df, test_size=0.1, random_state=42)
             
-            preprocessor = IntentTargetingPreprocessor(
+            checkpoint = config["model"]["intent_checkpoint"]
+            train_clean_path = config["data"]["task_4"]["train_tokenized_path"]
+            val_clean_path = config["data"]["task_4"]["val_tokenized_path"]
+            test_clean_path = config["data"]["task_4"]["test_tokenized_path"]
+            
+            train_preprocessor = IntentTargetingPreprocessor(
                 checkpoint=checkpoint, 
                 text_col="discharge_note", 
-                cleaned_path=clean_path)
+                cleaned_path=train_clean_path)
+            
+            val_preprocessor = IntentTargetingPreprocessor(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=val_clean_path)
+            
+            test_preprocessor = IntentTargetingPreprocessor(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=test_clean_path)
 
-            preprocessor.preprocess(intent_data)
+            train_preprocessor.preprocess(train_df)
+            val_preprocessor.preprocess(val_df)
+            test_preprocessor.preprocess(test_df)
+
 
                 
 
@@ -272,13 +292,16 @@ def main(args: list[str]) -> None:
                 )
         
         elif args.target == "intent_targeting":
-            tokenized_data_dir = config["data"]["task_4"]["tokenized_path"]
+            # Modified to load train and validation data prepared at preprocessing. Data no longer split directly prior to training.
+            train_tokenized_data_dir = config["data"]["task_4"]["train_tokenized_path"]
+            val_tokenized_data_dir = config["data"]["task_4"]["val_tokenized_path"]
             checkpoint = config["model"]["intent_checkpoint"]
             model_weights_dir = config["model"]["intent_model"]
             training_checkpoints = config["model"]["intent_training_checkpoints"]
 
             intent_model_training(
-                data_dir=tokenized_data_dir,
+                train_data_dir=train_tokenized_data_dir,
+                val_data_dir=val_tokenized_data_dir,
                 checkpoint=checkpoint,
                 save_dir=model_weights_dir,
                 training_checkpoint_dir=training_checkpoints
