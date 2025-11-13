@@ -94,7 +94,7 @@ class MixedMoEProjectionLayer(nn.Module):
         hidden_scales = [0.5, 1.0, 1.5] # scaling on hidden dimension
 
         self.experts = nn.ModuleList()
-        for i in enumerate(num_experts):
+        for i in range(num_experts):
             activation = activations[i % len(activations)]
             depth = random.choice(depths)
             scale = random.choice(hidden_scales)
