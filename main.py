@@ -244,7 +244,7 @@ def main(args: list[str]) -> None:
             model_weights_dir = config["model"]["classification_model_temp"] # modified to use fewer labels for initial training.
             training_checkpoints = config["model"]["classification_training_checkpoints_temp"] # modified to use fewer labels for initial training.
             test_data_dir = config["data"]["classification_test_data_temp"] # modified to use fewer labels for initial training.
-            metrics_dir = config["results"]["classification_w_mod_code_MoE_8_experts"]
+            metrics_dir = config["results"]["classification_wo_code_LORA_high_cap_Mixed_MoE_8"]
             num_runs = args.num_runs
 
             classification_model_training(
@@ -305,7 +305,8 @@ def main(args: list[str]) -> None:
                 val_data_dir=val_tokenized_data_dir,
                 checkpoint=checkpoint,
                 save_dir=model_weights_dir,
-                training_checkpoint_dir=training_checkpoints
+                training_checkpoint_dir=training_checkpoints,
+                metric_dir=metric_dir
             )
 
 

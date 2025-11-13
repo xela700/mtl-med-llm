@@ -4,7 +4,7 @@ Moved from train_model script.
 """
 
 import torch
-from model.mixture_of_experts import MoEProjectionLayer
+from model.mixture_of_experts import MoEProjectionLayer, MixedMoEProjectionLayer
 from transformers import PreTrainedModel, AutoConfig, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
 from torch import Tensor
 
@@ -223,12 +223,11 @@ class CodelessWrapper(PreTrainedModel):
         self.base_encoder = base_encoder
         hidden_dim = base_encoder.config.hidden_size
 
-        self.proj = MoEProjectionLayer(
+        self.proj = MixedMoEProjectionLayer(
             input_dim=hidden_dim,
             hidden_dim=proj_hidden,
             num_experts=8,
-            top_k=4,
-            dropout=0.2
+            top_k=4
         )
 
         self.classifier = torch.nn.Linear(hidden_dim, num_labels) # classifier head

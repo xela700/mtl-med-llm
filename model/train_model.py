@@ -91,10 +91,10 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         )
 
         lora_config = LoraConfig( # PERF tuning
-            r=8, # Increased rank from 8
-            lora_alpha=16, # quadrupled from 16 to 64
+            r=32, # Increased rank from 8
+            lora_alpha=64, # quadrupled from 16 to 64
             target_modules=["query", "value"],
-            lora_dropout=0.1, # Lowered from 0.1
+            lora_dropout=0.05, # Lowered from 0.1
             bias="none",
             task_type=TaskType.SEQ_CLS
         )
@@ -124,12 +124,12 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         device = "cuda" if torch.cuda.is_available() else "cpu"
         base_encoder = model
         label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
-        model = TrainableCodeDescriptionWrapper(
+        model = CodelessWrapper(
             config=config, 
             base_encoder=base_encoder,
             pos_weight=pos_weight,
             active_label_mask=mask,
-            label_embeds=label_embeds
+            num_labels=num_labels
             )
         # End frozen code description encoder modifications
         metrics_logger.run_counter = run
