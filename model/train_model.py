@@ -17,7 +17,7 @@ import json
 import logging
 from torch import Tensor
 from torch.utils.data import DataLoader
-from datasets import Dataset
+from datasets import Dataset, DatasetDict
 from typing import Union, Dict, Tuple
 from pathlib import Path
 
@@ -418,7 +418,7 @@ def intent_model_training(dataset_dir: str, label_dir: str, checkpoint: str, sav
         None
     """
 
-    dataset = Dataset.load_from_disk(dataset_dir)
+    dataset = DatasetDict.load_from_disk(dataset_dir)
 
     train_dataset = dataset["train"]
     val_dataset = dataset["validation"]
