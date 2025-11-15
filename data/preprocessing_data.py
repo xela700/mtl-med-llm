@@ -14,11 +14,12 @@ import random
 import json
 from tqdm import tqdm
 from pathlib import Path
-from datasets import Dataset
+from datasets import Dataset, DatasetDict
 from abc import ABC, abstractmethod
 from transformers import AutoTokenizer, pipeline, AutoModelForSeq2SeqLM
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 
 
@@ -993,6 +994,88 @@ class IntentTargetingPreprocessor(TextPreprocessor):
 
         if save_dir:
             self.tokenizer.save_pretrained(save_directory=save_dir)
+
+class IntentDataPreprocessor:
+    """
+    Alternate preprocessor for the intent targeting model. Uses custom-made prompts mixed with real text.
+
+    Attributes:
+        tokenizer (AutoTokenizer): tokenizer for model
+        label2id (dict[str:int]): labels to ids
+        id2label(dict[int:str]): ids to labels
+    """
+
+    def __init__(self, tokenizer: str):
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
+        self.label2id = {"classification": 0, "summarization": 1}
+        self.id2label = {0: "classification", 1: "summarization"}
+    
+    def build_dataset(self, intent_data: pd.DataFrame, save_path: str, test_size: float = 0.1, val_size: float = 0.1, seed: int = 42) -> None:
+        """
+        Uses the created intent targeting dataset to build a tokenized dataset for training use.
+
+        Args:
+            intent_data (pd.DataFrame): intent targeting dataframe
+            save_path (str): path to save dataset to
+            test_size (float): size of test dataset
+            val_size (float): size of val dataset
+            seed (int): seed for randomization
+        
+        Returns:
+            DatasetDict: HuggingFace compatible dataset dictionary for training
+        """
+
+        intent_data["label_id"] = intent_data["label"].map(self.label2id)
+
+        train_df, temp_df = train_test_split(
+            intent_data, test_size=test_size + val_size, random_state=seed, stratify=intent_data["label"]
+        )
+
+        rel_val_size = val_size / (test_size + val_size)
+
+        val_df, test_df = train_test_split(
+            temp_df, test_size=1 - rel_val_size, random_state=seed, stratify=temp_df["label"]
+        )
+
+        train_ds = Dataset.from_pandas(train_df)
+        val_ds = Dataset.from_pandas(val_df)
+        test_ds = Dataset.from_pandas(test_df)
+
+        def tokenization(batch: dict[str, list[str]]) -> dict[str, list[int]]:
+            return self.tokenizer(
+                batch["text"],
+                truncation=True,
+                padding=False,
+                max_length=256
+            )
+        
+        train_ds = train_ds.map(tokenization, batched=True)
+        val_ds = val_ds.map(tokenization, batched=True)
+        test_ds = test_ds.map(tokenization, batched=True)
+
+        dataset = DatasetDict({
+            "train": train_ds,
+            "validation": val_ds,
+            "test": test_ds
+        })
+
+        dataset.save_to_disk(save_path)
+    
+    def save_label_mappings(self, save_path: str) -> None:
+        """
+        Saves label mappings for model use. Creates json files for label2id and id2label
+
+        save_path (str): path to save label mappings to
+        """
+
+        Path(save_path).mkdir(parents=True, exist_ok=True)
+
+        with open(Path(save_path) / "label2id.json", "w") as f:
+            json.dump(self.label2id, f)
+        
+        with open(Path(save_path) / "id2label.json", "w") as f:
+            json.dump(self.id2label, f)
+
         
         
         

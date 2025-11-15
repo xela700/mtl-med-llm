@@ -19,6 +19,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from datasets import Dataset
 from typing import Union, Dict, Tuple
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -403,7 +404,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     tokenizer.save_pretrained(save_dir)
 
 
-def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, metric_dir: str) -> None:
+def intent_model_training(dataset_dir: str, label_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, metric_dir: str) -> None:
     """
     Training pipeline for intent targeting (between classification and summarization for now).
 
@@ -417,19 +418,17 @@ def intent_model_training(train_data_dir: str, val_data_dir:str, checkpoint: str
         None
     """
 
-    train_dataset = Dataset.load_from_disk(train_data_dir)
-    val_dataset = Dataset.load_from_disk(val_data_dir)
+    dataset = Dataset.load_from_disk(dataset_dir)
 
-    # dataset = dataset.train_test_split(test_size=0.2)
-    # train_dataset = dataset["train"]
-    # test_dataset = dataset["test"]
+    train_dataset = dataset["train"]
+    val_dataset = dataset["validation"]
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
-    with open("data\cleaned_data\intent_label2id.json") as file:
+    with open(Path(label_dir) / "label2id.json") as file:
         label2id = json.load(file)
     
-    with open("data\cleaned_data\intent_id2label.json") as file:
+    with open(Path(label_dir) / "id2label.json") as file:
         id2label = json.load(file)
 
     model = AutoModelForSequenceClassification.from_pretrained(
