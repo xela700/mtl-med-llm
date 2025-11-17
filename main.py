@@ -16,8 +16,10 @@ import logging
 from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
-from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor, CodePreprocessor
+from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor, CodePreprocessor, IntentDataPreprocessor
 from model.train_model import classification_model_training, summarization_model_training, intent_model_training, code_classification_model_setup
+from sklearn.model_selection import train_test_split
+from data.intent_prompt_data import create_intent_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,13 @@ def main(args: list[str]) -> None:
             fetch_and_save_query(query=config["data"]["task_1"]["query"], save_path=config["data"]["task_1"]["data_path"])
             fetch_and_save_query(query=config["data"]["task_2"]["query"], save_path=config["data"]["task_2"]["data_path"])
             fetch_and_save_query(query=config["data"]["task_3"]["query"], save_path=config["data"]["task_3"]["data_path"])
+        elif args.target == "intent_targeting":
+            create_intent_dataset(
+                note_path=config["data"]["task_3"]["data_path"],
+                text_col="discharge_note",
+                save_dir=config["data"]["task_4"]["temp_intent_data_path"],
+                limit=500
+            )
 
     
     elif args.command == "preprocess":
@@ -121,24 +130,52 @@ def main(args: list[str]) -> None:
             preprocessor.preprocess(base_data, save_dir=model_save_dir)
         
         elif args.target == "intent_targeting":
+            # Modification to split data prior to preprocessing to avoid data leakage. Also upped samples to 5000 from 300.
             intent_path = config["data"]["task_4"]["data_path"]
             if os.path.exists(intent_path):
                 intent_data = load_data(config["data"]["task_4"]["data_path"])
             else:
                 base_data = load_data(config["data"]["task_3"]["data_path"])
-                intent_data = base_data.sample(n=300, random_state=42) # Don't need thousands of samples to train small intent targeting model at this time.
+                intent_data = base_data.sample(n=5000, random_state=42)
                 intent_data.to_parquet(intent_path)
             
-            checkpoint = config["model"]["intent_checkpoint"]
-            clean_path = config["data"]["task_4"]["tokenized_path"]
+            train_df, test_df = train_test_split(intent_data, test_size=0.2, random_state=42)
+            train_df, val_df = train_test_split(train_df, test_size=0.1, random_state=42)
             
-            preprocessor = IntentTargetingPreprocessor(
+            checkpoint = config["model"]["intent_checkpoint"]
+            train_clean_path = config["data"]["task_4"]["train_tokenized_path"]
+            val_clean_path = config["data"]["task_4"]["val_tokenized_path"]
+            test_clean_path = config["data"]["task_4"]["test_tokenized_path"]
+            
+            train_preprocessor = IntentTargetingPreprocessor(
                 checkpoint=checkpoint, 
                 text_col="discharge_note", 
-                cleaned_path=clean_path)
+                cleaned_path=train_clean_path)
+            
+            val_preprocessor = IntentTargetingPreprocessor(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=val_clean_path)
+            
+            test_preprocessor = IntentTargetingPreprocessor(
+                checkpoint=checkpoint, 
+                text_col="discharge_note", 
+                cleaned_path=test_clean_path)
 
-            preprocessor.preprocess(intent_data)
+            train_preprocessor.preprocess(train_df)
+            val_preprocessor.preprocess(val_df)
+            test_preprocessor.preprocess(test_df)
+        
+        elif args.target == "intent_targeting_mod": # Modified intent targeting preprocessing
+            intent_data = load_data(config["data"]["task_4"]["temp_intent_data_path"])
+            label_dir = config["data"]["task_4"]["temp_intent_label_path"]
+            intent_ds_path = config["data"]["task_4"]["temp_intent_dataset_path"]
+            checkpoint = config["model"]["intent_checkpoint"]
 
+            preprocessor = IntentDataPreprocessor(tokenizer=checkpoint)
+
+            preprocessor.build_dataset(intent_data=intent_data, save_path=intent_ds_path)
+            preprocessor.save_label_mappings(save_path=label_dir)
                 
 
     
@@ -224,7 +261,7 @@ def main(args: list[str]) -> None:
             model_weights_dir = config["model"]["classification_model_temp"] # modified to use fewer labels for initial training.
             training_checkpoints = config["model"]["classification_training_checkpoints_temp"] # modified to use fewer labels for initial training.
             test_data_dir = config["data"]["classification_test_data_temp"] # modified to use fewer labels for initial training.
-            metrics_dir = config["results"]["classification_w_mod_code_MoE_8_experts"]
+            metrics_dir = config["results"]["classification2_wo_code_Mixed_MoE"]
             num_runs = args.num_runs
 
             classification_model_training(
@@ -272,16 +309,21 @@ def main(args: list[str]) -> None:
                 )
         
         elif args.target == "intent_targeting":
-            tokenized_data_dir = config["data"]["task_4"]["tokenized_path"]
+            # Modified to load train and validation data prepared at preprocessing. Data no longer split directly prior to training.
+            intent_dataset = config["data"]["task_4"]["temp_intent_dataset_path"]
+            intent_label_map = config["data"]["task_4"]["temp_intent_label_path"]
             checkpoint = config["model"]["intent_checkpoint"]
             model_weights_dir = config["model"]["intent_model"]
             training_checkpoints = config["model"]["intent_training_checkpoints"]
+            metric_dir = config["results"]["intent_targeting_mod_data_low_lr"]
 
             intent_model_training(
-                data_dir=tokenized_data_dir,
+                dataset_dir=intent_dataset,
+                label_dir=intent_label_map,
                 checkpoint=checkpoint,
                 save_dir=model_weights_dir,
-                training_checkpoint_dir=training_checkpoints
+                training_checkpoint_dir=training_checkpoints,
+                metric_dir=metric_dir
             )
 
 
@@ -293,13 +335,13 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(dest="command")
 
     data_parser = subparsers.add_parser("fetch")
-    data_parser.add_argument("target", choices=["classification", "summarization", "all"], help="Specify which dataset(s) to pull from BigQuery")
+    data_parser.add_argument("target", choices=["classification", "summarization", "all", "intent_targeting"], help="Specify which dataset(s) to pull from BigQuery/generate")
 
     generation_parser = subparsers.add_parser("summary_generation")
     generation_parser.add_argument("target", choices=["real", "synthetic", "synthetic_continue", "combine"], help="Specify target creation for summary task. Combine unites both types of targets into one dataset.")
 
     preprocess_parser = subparsers.add_parser("preprocess")
-    preprocess_parser.add_argument("target", choices=["classification_base", "classification_code", "summary_generation", "summarization", "intent_targeting"], help="Specify which preprocess pipeline(s) to initiate")
+    preprocess_parser.add_argument("target", choices=["classification_base", "classification_code", "summary_generation", "summarization", "intent_targeting", "intent_targeting_mod"], help="Specify which preprocess pipeline(s) to initiate")
 
     training_parser = subparsers.add_parser("training")
     training_parser.add_argument("target", choices=["classification", "classification_code", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")

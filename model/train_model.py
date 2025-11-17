@@ -17,8 +17,9 @@ import json
 import logging
 from torch import Tensor
 from torch.utils.data import DataLoader
-from datasets import Dataset
+from datasets import Dataset, DatasetDict
 from typing import Union, Dict, Tuple
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +125,12 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         device = "cuda" if torch.cuda.is_available() else "cpu"
         base_encoder = model
         label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
-        model = TrainableCodeDescriptionWrapper(
+        model = CodelessWrapper(
             config=config, 
             base_encoder=base_encoder,
             pos_weight=pos_weight,
             active_label_mask=mask,
-            label_embeds=label_embeds
+            num_labels=num_labels
             )
         # End frozen code description encoder modifications
         metrics_logger.run_counter = run
@@ -403,7 +404,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     tokenizer.save_pretrained(save_dir)
 
 
-def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str) -> None:
+def intent_model_training(dataset_dir: str, label_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, metric_dir: str) -> None:
     """
     Training pipeline for intent targeting (between classification and summarization for now).
 
@@ -417,18 +418,17 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
         None
     """
 
-    dataset = Dataset.load_from_disk(data_dir)
+    dataset = DatasetDict.load_from_disk(dataset_dir)
 
-    dataset = dataset.train_test_split(test_size=0.2)
     train_dataset = dataset["train"]
-    test_dataset = dataset["test"]
+    val_dataset = dataset["validation"]
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
-    with open("data\cleaned_data\intent_label2id.json") as file:
+    with open(Path(label_dir) / "label2id.json") as file:
         label2id = json.load(file)
     
-    with open("data\cleaned_data\intent_id2label.json") as file:
+    with open(Path(label_dir) / "id2label.json") as file:
         id2label = json.load(file)
 
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -440,6 +440,8 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
+    metrics_logger = MetricsLoggerCallback(output_dir=metric_dir)
+
     training_args = TrainingArguments(
         output_dir=training_checkpoint_dir,
         eval_strategy="epoch",
@@ -447,9 +449,10 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
         logging_strategy="epoch",
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
-        num_train_epochs=3,
-        learning_rate=2e-5,
+        num_train_epochs=10,
+        learning_rate=1e-5,
         weight_decay=0.01,
+        warmup_ratio=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="accuracy"
     )
@@ -458,10 +461,11 @@ def intent_model_training(data_dir: str, checkpoint: str, save_dir: str, trainin
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=test_dataset,
-        tokenizer=tokenizer,
+        eval_dataset=val_dataset,
+        processing_class=tokenizer,
         data_collator=data_collator,
-        compute_metrics=intent_compute_metrics
+        compute_metrics=intent_compute_metrics,
+        callbacks=[metrics_logger]
     )
 
     trainer.train()

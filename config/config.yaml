@@ -44,6 +44,13 @@ data:
     description: "Data related to intent targeting for classification/summarization. Can use portion of base data from task_3."
     data_path: data/raw_data/intent_data.parquet
     tokenized_path: data/cleaned_data/intent_dataset_tokenized
+    train_tokenized_path: data/cleaned_data/intent_dataset_tokenized_training
+    val_tokenized_path: data/cleaned_data/intent_dataset_tokenized_val
+    test_tokenized_path: data/cleaned_data/intent_dataset_tokenized_test
+
+    temp_intent_data_path: data/raw_data/temp_intent_data.parquet
+    temp_intent_label_path: data/cleaned_data/temp_intent_labels
+    temp_intent_dataset_path: data/cleaned_data/temp_intent_dataset
   
   task_5:
     description: "Data related to code encoder for classification task. Contains 'code: description' style data."
@@ -87,3 +94,9 @@ results:
   classification_wo_code_LORA_high_cap_MoE_8: results/reporting/classification_wo_code_LORA_high_cap_MoE_8
   classification_w_mod_code_MoE: results/reporting/classification_w_mod_code_MoE
   classification_w_mod_code_MoE_8_experts: results/reporting/classification_w_mod_code_MoE_8_experts
+  classification_wo_code_LORA_high_cap_Mixed_MoE_8: results/reporting/classification_wo_code_LORA_high_cap_Mixed_MoE_8
+  classification2_wo_code_Mixed_MoE: results/reporting/classification_wo_code_LORA_high_cap_Mixed_MoE_8
+
+  intent_targeting: results/reporting/intent_targeting
+  intent_targeting_mod_data: results/reporting/intent_targeting_mod_data
+  intent_targeting_mod_data_low_lr: results/reporting/intent_targeting_mod_data_low_lr

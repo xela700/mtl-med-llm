@@ -14,11 +14,12 @@ import random
 import json
 from tqdm import tqdm
 from pathlib import Path
-from datasets import Dataset
+from datasets import Dataset, DatasetDict
 from abc import ABC, abstractmethod
 from transformers import AutoTokenizer, pipeline, AutoModelForSeq2SeqLM
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 
 
@@ -842,23 +843,36 @@ class IntentTargetingPreprocessor(TextPreprocessor):
     def __init__(self, checkpoint, text_col, cleaned_path, remove_sections = None):
         super().__init__(checkpoint, text_col, cleaned_path, remove_sections)
         self.intent_prompts = {
-            "summarizaton": [
-                "Summarize these notes:\n",
-                "Write a short summary of the following:\n",
-                "Can you provide a brief summary?\n",
-                "Give me a brief description of this patient's visit:\n",
-                "Can you shorten the following?\n",
-                "Describe these clinical notes:\n",
-                "How would you describe the patient's visit?\n"
+            "summarization": [
+                "Summarize these notes:",
+                "Write a short summary of the following:",
+                "Can you provide a brief summary?",
+                "Give me a brief description of this patient's visit:",
+                "Can you shorten the following?",
+                "Describe these clinical notes:",
+                "How would you describe the patient's visit?",
+                "Based on this note, what happened?",
+                "What is the key takeaway from this note?",
+                "Describe the main points for this:"
             ],
             "classification": [
-                "Classify this note:\n",
-                "What ICD codes relate to this patient's visit?\n",
-                "Determine ICD codes based on the following text:\n",
-                "Codes associated with patient\n",
-                "Potential diagnosis for the following patient:\n",
-                "Please identify ICD codes for this visit:\n",
-                "ICD codes from note:\n"
+                "Classify this note:",
+                "What ICD codes relate to this patient's visit?",
+                "Determine ICD codes based on the following text:",
+                "Codes associated with patient",
+                "Potential diagnosis for the following patient:",
+                "Please identify ICD codes for this visit:",
+                "ICD codes from note:",
+                "What labels should be assigned here?",
+                "Assign suitable categories for this note:",
+                "What labels would you apply to this patient's visit?"
+            ],
+            "neutral": [
+                "Process the following input:",
+                "Review the text below:",
+                "Consider the following note:",
+                "Analyze this record:",
+                "Read the following:"
             ]
         }
         self.label2id = None
@@ -866,19 +880,31 @@ class IntentTargetingPreprocessor(TextPreprocessor):
 
     def prepend_random_prompt(self, sample: str) -> str:
         """
-        Prepends a random intent prompt to the text based on intent. Intents initialized with the class.
-        Part of subclass' preprocess function.
+        Modified prepending function that provides the opportunity to add neutral prompts, opposite prompts, or no prompt at all.
+        Intended to help with model's ability to generalize.
 
         Args:
             sample (str): Individual text with an associated intent.
 
         Returns:
-            str: Same text with a random prompt prepended.
+            str: Same text with a random prompt prepended or the same text
         """
-        intent = sample["label"]
-        prompts = self.intent_prompts.get(intent, [""])
-        prompt = random.choice(prompts)
-        return prompt + sample[self.text_col]
+        label = sample["label"]
+
+        if random.random() < 0.7: # 70% chance to add a prompt
+            choice_type = random.random()
+            # If prompt prepended, 50% chance to match with appropriate prompt, 25% for neutral prompt, and 25% for opposite prompt
+            if choice_type < 0.5:
+                pool = self.intent_prompts[label]
+            elif choice_type < 0.75:
+                pool = self.intent_prompts["neutral"]
+            else:
+                opposite = "classification" if label == "summarization" else "summarization"
+                pool = self.intent_prompts[opposite]
+            prompt = random.choice(pool)
+            return f"{prompt} {sample[self.text_col]}"
+        else:
+            return sample[self.text_col]
 
     def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
         """
@@ -927,9 +953,13 @@ class IntentTargetingPreprocessor(TextPreprocessor):
             dataframe.rename(columns={self.text_col: "input"}, inplace=True)
             self.text_col = "input"
         
-        half_df = dataframe.sample(frac=0.5, random_state=42).index
+        dataframe["label"] = dataframe["input"].apply(
+            lambda _: random.choice(["classification", "summarization"])
+        )
+        
+        # half_df = dataframe.sample(frac=0.5, random_state=42).index
 
-        dataframe["label"] = np.where(dataframe.index.isin(half_df), "classification", "summarization")
+        # dataframe["label"] = np.where(dataframe.index.isin(half_df), "classification", "summarization")
 
         lable_encoder = LabelEncoder()
         lable_encoder.fit(dataframe["label"])
@@ -964,6 +994,93 @@ class IntentTargetingPreprocessor(TextPreprocessor):
 
         if save_dir:
             self.tokenizer.save_pretrained(save_directory=save_dir)
+
+class IntentDataPreprocessor:
+    """
+    Alternate preprocessor for the intent targeting model. Uses custom-made prompts mixed with real text.
+
+    Attributes:
+        tokenizer (AutoTokenizer): tokenizer for model
+        label2id (dict[str:int]): labels to ids
+        id2label(dict[int:str]): ids to labels
+    """
+
+    def __init__(self, tokenizer: str):
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
+        self.label2id = {"classification": 0, "summarization": 1}
+        self.id2label = {0: "classification", 1: "summarization"}
+    
+    def build_dataset(self, intent_data: pd.DataFrame, save_path: str, test_size: float = 0.1, val_size: float = 0.1, seed: int = 42) -> None:
+        """
+        Uses the created intent targeting dataset to build a tokenized dataset for training use.
+
+        Args:
+            intent_data (pd.DataFrame): intent targeting dataframe
+            save_path (str): path to save dataset to
+            test_size (float): size of test dataset
+            val_size (float): size of val dataset
+            seed (int): seed for randomization
+        
+        Returns:
+            DatasetDict: HuggingFace compatible dataset dictionary for training
+        """
+
+        intent_data["label"] = intent_data["label"].map(self.label2id)
+        intent_data = intent_data[["text", "label"]]
+
+        train_df, temp_df = train_test_split(
+            intent_data, test_size=test_size + val_size, random_state=seed, stratify=intent_data["label"]
+        )
+
+        rel_val_size = val_size / (test_size + val_size)
+
+        val_df, test_df = train_test_split(
+            temp_df, test_size=1 - rel_val_size, random_state=seed, stratify=temp_df["label"]
+        )
+
+        train_ds = Dataset.from_pandas(train_df)
+        val_ds = Dataset.from_pandas(val_df)
+        test_ds = Dataset.from_pandas(test_df)
+
+        def encode_batch(batch: dict[str, list[str]]) -> dict[str, list[int]]:
+            encoded = self.tokenizer(
+                batch["text"],
+                truncation=True,
+                padding="max_length",
+                max_length=128
+            )
+
+            encoded["label"] = batch["label"]
+
+            return encoded
+        
+        train_ds = train_ds.map(encode_batch, batched=True, remove_columns=train_ds.column_names)
+        val_ds = val_ds.map(encode_batch, batched=True, remove_columns=val_ds.column_names)
+        test_ds = test_ds.map(encode_batch, batched=True, remove_columns=test_ds.column_names)
+
+        dataset = DatasetDict({
+            "train": train_ds,
+            "validation": val_ds,
+            "test": test_ds
+        })
+
+        dataset.save_to_disk(save_path)
+    
+    def save_label_mappings(self, save_path: str) -> None:
+        """
+        Saves label mappings for model use. Creates json files for label2id and id2label
+
+        save_path (str): path to save label mappings to
+        """
+
+        Path(save_path).mkdir(parents=True, exist_ok=True)
+
+        with open(Path(save_path) / "label2id.json", "w") as f:
+            json.dump(self.label2id, f)
+        
+        with open(Path(save_path) / "id2label.json", "w") as f:
+            json.dump(self.id2label, f)
+
         
         
         

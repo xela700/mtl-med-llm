@@ -26,10 +26,11 @@ def classification_prediction(text: str) -> list[str]:
         list[str]: predicted ICD-10 codes in list format
     """
 
-    peft_model_path = config["model"]["classification_model"]
+    base_model = config["model"]["classification_checkpoint"]
+    peft_model_path = config["model"]["classification_model_temp"]
 
-    tokenizer = AutoTokenizer.from_pretrained(peft_model_path)
-    model = PeftModelForSequenceClassification.from_pretrained(peft_model_path)
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
+    model = PeftModelForSequenceClassification.from_pretrained(base_model, peft_model_path)
 
     inputs = tokenizer(text, return_tensor="pt").to(model.device)
     outputs = model(**inputs)
@@ -61,10 +62,11 @@ def summarization_prediction(text: str) -> str:
         str: Summary of clinical note
     """
 
+    base_model = config["model"]["summarization_checkpoint"]
     peft_model_path = config["model"]["summarization_model"]
     
-    tokenizer = AutoTokenizer.from_pretrained(peft_model_path)
-    model = PeftModelForSeq2SeqLM.from_pretrained(peft_model_path)
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
+    model = PeftModelForSeq2SeqLM.from_pretrained(base_model, peft_model_path)
 
     inputs = tokenizer(text, return_tensor="pt").to(model.device)
     summary = model.generate(**inputs, max_new_tokens=200)
