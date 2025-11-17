@@ -450,8 +450,9 @@ def intent_model_training(dataset_dir: str, label_dir: str, checkpoint: str, sav
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
         num_train_epochs=10,
-        learning_rate=2e-5,
+        learning_rate=1e-5,
         weight_decay=0.01,
+        warmup_ratio=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="accuracy"
     )
