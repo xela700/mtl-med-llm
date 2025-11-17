@@ -92,10 +92,10 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         )
 
         lora_config = LoraConfig( # PERF tuning
-            r=32, # Increased rank from 8
-            lora_alpha=64, # quadrupled from 16 to 64
+            r=8, # Increased rank from 8
+            lora_alpha=16, # quadrupled from 16 to 64
             target_modules=["query", "value"],
-            lora_dropout=0.05, # Lowered from 0.1
+            lora_dropout=0.1, # Lowered from 0.1
             bias="none",
             task_type=TaskType.SEQ_CLS
         )

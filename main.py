@@ -261,7 +261,7 @@ def main(args: list[str]) -> None:
             model_weights_dir = config["model"]["classification_model_temp"] # modified to use fewer labels for initial training.
             training_checkpoints = config["model"]["classification_training_checkpoints_temp"] # modified to use fewer labels for initial training.
             test_data_dir = config["data"]["classification_test_data_temp"] # modified to use fewer labels for initial training.
-            metrics_dir = config["results"]["classification_wo_code_LORA_high_cap_Mixed_MoE_8"]
+            metrics_dir = config["results"]["classification2_wo_code_Mixed_MoE"]
             num_runs = args.num_runs
 
             classification_model_training(
@@ -315,7 +315,7 @@ def main(args: list[str]) -> None:
             checkpoint = config["model"]["intent_checkpoint"]
             model_weights_dir = config["model"]["intent_model"]
             training_checkpoints = config["model"]["intent_training_checkpoints"]
-            metric_dir = config["results"]["intent_targeting_mod_data"]
+            metric_dir = config["results"]["intent_targeting_mod_data_low_lr"]
 
             intent_model_training(
                 dataset_dir=intent_dataset,

@@ -226,8 +226,8 @@ class CodelessWrapper(PreTrainedModel):
         self.proj = MixedMoEProjectionLayer(
             input_dim=hidden_dim,
             hidden_dim=proj_hidden,
-            num_experts=8,
-            top_k=4
+            num_experts=4,
+            top_k=2
         )
 
         self.classifier = torch.nn.Linear(hidden_dim, num_labels) # classifier head
