@@ -1025,7 +1025,8 @@ class IntentDataPreprocessor:
             DatasetDict: HuggingFace compatible dataset dictionary for training
         """
 
-        intent_data["label_id"] = intent_data["label"].map(self.label2id)
+        intent_data["label"] = intent_data["label"].map(self.label2id)
+        intent_data = intent_data[["text", "label"]]
 
         train_df, temp_df = train_test_split(
             intent_data, test_size=test_size + val_size, random_state=seed, stratify=intent_data["label"]
@@ -1041,17 +1042,21 @@ class IntentDataPreprocessor:
         val_ds = Dataset.from_pandas(val_df)
         test_ds = Dataset.from_pandas(test_df)
 
-        def tokenization(batch: dict[str, list[str]]) -> dict[str, list[int]]:
-            return self.tokenizer(
+        def encode_batch(batch: dict[str, list[str]]) -> dict[str, list[int]]:
+            encoded = self.tokenizer(
                 batch["text"],
                 truncation=True,
-                padding=False,
-                max_length=256
+                padding="max_length",
+                max_length=128
             )
+
+            encoded["label"] = batch["label"]
+
+            return encoded
         
-        train_ds = train_ds.map(tokenization, batched=True)
-        val_ds = val_ds.map(tokenization, batched=True)
-        test_ds = test_ds.map(tokenization, batched=True)
+        train_ds = train_ds.map(encode_batch, batched=True, remove_columns=train_ds.column_names)
+        val_ds = val_ds.map(encode_batch, batched=True, remove_columns=val_ds.column_names)
+        test_ds = test_ds.map(encode_batch, batched=True, remove_columns=test_ds.column_names)
 
         dataset = DatasetDict({
             "train": train_ds,

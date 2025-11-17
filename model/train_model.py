@@ -461,7 +461,7 @@ def intent_model_training(dataset_dir: str, label_dir: str, checkpoint: str, sav
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=intent_compute_metrics,
         callbacks=[metrics_logger]
