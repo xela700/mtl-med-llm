@@ -6,6 +6,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Auto
 from peft import PeftModel, PeftModelForSequenceClassification, PeftModelForSeq2SeqLM
 from utils.config_loader import load_config
 from data.fetch_data import load_data
+from model.model_projection import Seq2SeqWProjection
 import torch.nn.functional as F
 import json
 import torch
@@ -67,7 +68,7 @@ def summarization_prediction(text: str) -> str:
     peft_model_path = config["model"]["summarization_model"]
     
     tokenizer = AutoTokenizer.from_pretrained(base_model)
-    model = AutoModelForSeq2SeqLM.from_pretrained(base_model)
+    base_model = Seq2SeqWProjection.from_pretrained(base_model)
     model = PeftModel.from_pretrained(model, peft_model_path)
 
     model = model.merge_and_unload()
@@ -75,7 +76,7 @@ def summarization_prediction(text: str) -> str:
     model.eval()
     model.to("cuda" if torch.cuda.is_available() else "cpu")
 
-    inputs = tokenizer(text, return_tensors="pt", max_length=512).to(model.device)
+    inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True).to(model.device)
     
     with torch.no_grad():
         output_ids = model.generate(**inputs, max_new_tokens=200, num_beams=4, early_stopping=True)

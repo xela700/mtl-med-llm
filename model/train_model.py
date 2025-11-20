@@ -334,7 +334,6 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint, model_max_length=1024)
     config = AutoConfig.from_pretrained(checkpoint)
     model = Seq2SeqWProjection.from_pretrained(checkpoint, config=config, torch_dtype=torch.float16) # modified to use projection head
-    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True, model=model, label_pad_token_id=-100, pad_to_multiple_of=8)
 
     lora_config = LoraConfig( # PERF tuning
         r=32, # 8 -> 32
@@ -345,13 +344,28 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         task_type=TaskType.SEQ_2_SEQ_LM
     )
 
-    ia3_config = IA3Config(
-        target_modules="all-linear",
-        task_type=TaskType.SEQ_2_SEQ_LM
-    )
+    # ia3_config = IA3Config(
+    #     target_modules="all-linear",
+    #     task_type=TaskType.SEQ_2_SEQ_LM
+    # )
 
     model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
     model.to("cuda")
+
+    for name, param in model.named_parameters():
+        if "proj" in name:
+            param.requires_grad = True
+        elif "lora_" in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
+    
+    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, 
+                                           padding=True, 
+                                           model=model, 
+                                           label_pad_token_id=-100, 
+                                           pad_to_multiple_of=8)
 
     training_args = Seq2SeqTrainingArguments(
         output_dir=training_checkpoint_dir,
@@ -367,11 +381,6 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         predict_with_generate=False,
         fp16=True
     )
-
-    # Modification to ensure only adapter parameters and projection head are being trained
-    for name, param in model.named_parameters():
-        if not any(k in name for k in ["lora_", "proj"]):
-            param.requires_grad = False
 
     trainer = Seq2SeqTrainer(
         model=model,
