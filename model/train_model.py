@@ -350,7 +350,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         task_type=TaskType.SEQ_2_SEQ_LM
     )
 
-    model = get_peft_model(model, ia3_config)
+    model = get_peft_model(model, lora_config)
     model.to("cuda")
 
     training_args = Seq2SeqTrainingArguments(

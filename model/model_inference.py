@@ -2,8 +2,8 @@
 Script for running inference based on saved model weights. Used for both classification and summarization.
 """
 
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from peft import PeftModelForSequenceClassification, PeftModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
+from peft import PeftModel, PeftModelForSequenceClassification, PeftModelForSeq2SeqLM
 from utils.config_loader import load_config
 from data.fetch_data import load_data
 import torch.nn.functional as F
@@ -30,7 +30,8 @@ def classification_prediction(text: str) -> list[str]:
     peft_model_path = config["model"]["classification_model_temp"]
 
     tokenizer = AutoTokenizer.from_pretrained(base_model)
-    model = PeftModelForSequenceClassification.from_pretrained(base_model, peft_model_path)
+    model = AutoModelForSequenceClassification.from_pretrained(base_model, num_labels=50)
+    model = PeftModel.from_pretrained(model, peft_model_path)
 
     inputs = tokenizer(text, return_tensor="pt").to(model.device)
     outputs = model(**inputs)
@@ -66,12 +67,20 @@ def summarization_prediction(text: str) -> str:
     peft_model_path = config["model"]["summarization_model"]
     
     tokenizer = AutoTokenizer.from_pretrained(base_model)
-    model = PeftModelForSeq2SeqLM.from_pretrained(base_model, peft_model_path)
+    model = AutoModelForSeq2SeqLM.from_pretrained(base_model)
+    model = PeftModel.from_pretrained(model, peft_model_path)
 
-    inputs = tokenizer(text, return_tensor="pt").to(model.device)
-    summary = model.generate(**inputs, max_new_tokens=200)
+    model = model.merge_and_unload()
 
-    return tokenizer.decode(summary[0], skip_special_tokens=True)
+    model.eval()
+    model.to("cuda" if torch.cuda.is_available() else "cpu")
+
+    inputs = tokenizer(text, return_tensors="pt", max_length=512).to(model.device)
+    
+    with torch.no_grad():
+        output_ids = model.generate(**inputs, max_new_tokens=200, num_beams=4, early_stopping=True)
+
+    return tokenizer.decode(output_ids[0], skip_special_tokens=True)
 
 def intent_prediction(text: str) -> str:
     """

@@ -95,7 +95,8 @@ results:
   classification_w_mod_code_MoE: results/reporting/classification_w_mod_code_MoE
   classification_w_mod_code_MoE_8_experts: results/reporting/classification_w_mod_code_MoE_8_experts
   classification_wo_code_LORA_high_cap_Mixed_MoE_8: results/reporting/classification_wo_code_LORA_high_cap_Mixed_MoE_8
-  classification2_wo_code_Mixed_MoE: results/reporting/classification_wo_code_LORA_high_cap_Mixed_MoE_8
+  classification2_wo_code_Mixed_MoE: results/reporting/classification2_wo_code_Mixed_MoE
+  classification2_wo_code_Mixed_MoE_8: results/reporting/classification2_wo_code_Mixed_MoE_8
 
   intent_targeting: results/reporting/intent_targeting
   intent_targeting_mod_data: results/reporting/intent_targeting_mod_data

@@ -261,7 +261,7 @@ def main(args: list[str]) -> None:
             model_weights_dir = config["model"]["classification_model_temp"] # modified to use fewer labels for initial training.
             training_checkpoints = config["model"]["classification_training_checkpoints_temp"] # modified to use fewer labels for initial training.
             test_data_dir = config["data"]["classification_test_data_temp"] # modified to use fewer labels for initial training.
-            metrics_dir = config["results"]["classification2_wo_code_Mixed_MoE"]
+            metrics_dir = config["results"]["classification2_wo_code_Mixed_MoE_8"]
             num_runs = args.num_runs
 
             classification_model_training(
@@ -297,7 +297,7 @@ def main(args: list[str]) -> None:
                 model_weights_dir = config["model"]["summarization_model"]
                 training_checkpoints = config["model"]["summarization_training_checkpoints"]
                 test_data_dir = config["data"]["summarization_test_data"]
-                metric_dir = f"results/reporting/summarization_higher_samp_w_proj_IA3/summarization_rouge_results_run_{i+1}.json"
+                metric_dir = f"results/reporting/summarization_higher_samp_w_proj_high_lora_2/summarization_rouge_results_run_{i+1}.json"
 
                 summarization_model_training(
                     data_dir=tokenized_data_dir,

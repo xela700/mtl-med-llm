@@ -302,8 +302,8 @@ if __name__ == "__main__":
     # classification_metrics()
     # summarization_metrics()
     # intent_metrics()
-    metrics = modified_metrics("results/reporting", "classification2")
-    plot_metric(metrics, "eval_f1_micro", legend_font="x-small")
+    metrics = modified_metrics("results/reporting", "intent")
+    plot_metric(metrics, "eval_loss", legend_font="x-small")
 
 
 
