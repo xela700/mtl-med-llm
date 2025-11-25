@@ -2,6 +2,7 @@
 Module to set up training tasks for all NLP models.
 """
 
+from pyexpat import model
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, AutoModel
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
@@ -15,6 +16,7 @@ import torch
 import numpy as np
 import json
 import logging
+import os
 from torch import Tensor
 from torch.utils.data import DataLoader
 from datasets import Dataset, DatasetDict
@@ -333,7 +335,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
 
     tokenizer = AutoTokenizer.from_pretrained(checkpoint, model_max_length=1024)
     config = AutoConfig.from_pretrained(checkpoint)
-    model = Seq2SeqWProjection.from_pretrained(checkpoint, config=config, torch_dtype=torch.float16) # modified to use projection head
+    base_model = Seq2SeqWProjection.from_pretrained(checkpoint, config=config) # modified to use projection head
 
     lora_config = LoraConfig( # PERF tuning
         r=32, # 8 -> 32
@@ -344,22 +346,40 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         task_type=TaskType.SEQ_2_SEQ_LM
     )
 
-    # ia3_config = IA3Config(
-    #     target_modules="all-linear",
-    #     task_type=TaskType.SEQ_2_SEQ_LM
-    # )
+    model = get_peft_model(base_model, lora_config)
 
-    model = get_peft_model(model, lora_config)
+    proj_ref = None
+    if hasattr(model, "base_model") and hasattr(model.base_model, "proj"):
+        proj_ref = model.base_model.proj
+    elif hasattr(model, "proj"):
+        proj_ref = model.proj
+    else:
+        raise RuntimeError("Projection head not found; ensure Seq2SeqWProjection defines self.proj")
+
+    # 1) Freeze everything first
+    for n, p in model.named_parameters():
+        p.requires_grad = False
+
+    # 2) Explicitly turn on requires_grad for proj (on the base model object)
+    for p in proj_ref.parameters():
+        p.requires_grad = True
+
+    # 3) Explicitly turn on requires_grad for any LoRA params created by PEFT
+    #    (these usually have 'lora' in their names; adapt if your PEFT version uses different prefixes)
+    for n, p in model.named_parameters():
+        if "lora" in n.lower():
+            p.requires_grad = True
+
+    
     model.print_trainable_parameters()
-    model.to("cuda")
-
-    for name, param in model.named_parameters():
-        if "proj" in name:
-            param.requires_grad = True
-        elif "lora_" in name:
-            param.requires_grad = True
-        else:
-            param.requires_grad = False
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+    
+    use_bf16 = False
+    try:
+        use_bf16 = torch.cuda.is_bf16_supported()
+    except:
+        use_bf16 = False
     
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, 
                                            padding=True, 
@@ -369,17 +389,21 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
 
     training_args = Seq2SeqTrainingArguments(
         output_dir=training_checkpoint_dir,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=4,
-        num_train_epochs=1, # modified by epoch loop below
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=16,
+        num_train_epochs=10, # modified by epoch loop below
         logging_dir="./logs",
         save_strategy="epoch",
         eval_strategy="no",
         logging_strategy="steps",
-        logging_steps=50,
+        logging_steps=200,
         save_total_limit=2,
         predict_with_generate=False,
-        fp16=True
+        fp16=True,
+        # bf16=False,
+        # gradient_checkpointing=False,
+        dataloader_num_workers=0,
+        group_by_length=True
     )
 
     trainer = Seq2SeqTrainer(
@@ -391,26 +415,42 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         data_collator=data_collator,
         compute_metrics=None
     )
+    
+    trainer.train()
 
-    # Modifying summarization training to halt training every epoch to evaluate on ROUGE
-    num_epochs = 10
-    for epoch in range(num_epochs):
-        print(f"Starting epoch {epoch+1} out of {num_epochs}")
+    # # Modifying summarization training to halt training every epoch to evaluate on ROUGE
+    # num_epochs = 10
+    # for epoch in range(num_epochs):
+    #     print(f"Starting epoch {epoch+1} out of {num_epochs}")
 
-        trainer.train()
+    #     trainer.train()
 
-        trainer.save_model(f"{training_checkpoint_dir}/epoch_{epoch+1}") # saving checkpoint
+    #     trainer.save_model(f"{training_checkpoint_dir}/epoch_{epoch+1}") # saving checkpoint
 
-        metrics = rouge_metrics(model, val_dataset, tokenizer) # all rouge metrics
-        print(f"Epoch {epoch+1} ROUGE-L:", metrics["rougeL"])
+    #     metrics = rouge_metrics(model, val_dataset, tokenizer) # all rouge metrics
+    #     print(f"Epoch {epoch+1} ROUGE-L:", metrics["rougeL"])
 
-        with open(metric_dir, "a") as f:
-            f.write(json.dumps({"epoch": epoch+1, **metrics}) + "\n")
+    #     with open(metric_dir, "a") as f:
+    #         f.write(json.dumps({"epoch": epoch+1, **metrics}) + "\n")
         
-        torch.cuda.empty_cache() # freeing GPU resources for training restart
+    #     torch.cuda.empty_cache() # freeing GPU resources for training restart
 
-    model.save_pretrained(save_dir)
-    tokenizer.save_pretrained(save_dir)
+    # Saving base model and tokenizer
+    base_save_dir = os.path.join(save_dir, "base_model")
+    os.makedirs(base_save_dir, exist_ok=True)
+    base_model.save_pretrained(base_save_dir)
+    tokenizer.save_pretrained(base_save_dir)
+
+    # Saving PEFT weights
+    peft_save_dir = os.path.join(save_dir, "peft_model")
+    os.makedirs(peft_save_dir, exist_ok=True)
+    model.save_pretrained(peft_save_dir)
+
+    # Saving projection head weights separately
+    proj_path = os.path.join(save_dir, "proj.pt")
+    torch.save(base_model.proj.state_dict(), proj_path)
+
+    print("Saved base model, tokenizer, PEFT weights, and projection head.")
 
 
 def intent_model_training(dataset_dir: str, label_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, metric_dir: str) -> None:

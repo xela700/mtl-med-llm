@@ -145,33 +145,37 @@ def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: Aut
         dict[str:float]: rouge metrics
     """
     rouge = load("rouge")
-    model.eval()
     model.to(device)
+    
     preds, refs = [], []
-    for i in tqdm(range(0, len(dataset), batch_size)):
-        batch = dataset[i:i+batch_size]
-        input_texts = batch["discharge_note"]
-        reference_texts = batch["target"]
 
-        inputs = tokenizer(
-            input_texts,
-            return_tensors="pt",
-            truncation=True,
-            max_length=1024,
-            padding=True
-        ).to(device)
+    with model.disable_adapter():
+        model.eval()
+        torch.set_grad_enabled(False)
+
+        for i in tqdm(range(0, len(dataset), batch_size)):
+            batch = dataset[i:i+batch_size]
+            input_texts = batch["discharge_note"]
+            reference_texts = batch["target"]
+
+            inputs = tokenizer(
+                input_texts,
+                return_tensors="pt",
+                truncation=True,
+                max_length=1024,
+                padding=True
+            ).to(device)
         
-        with torch.no_grad():
             outputs = model.generate(**inputs, 
-                                     max_new_tokens=max_gen_length,
-                                     do_sample=False,
-                                     pad_token_id=tokenizer.pad_token_id)
+                                    max_new_tokens=max_gen_length,
+                                    do_sample=False,
+                                    pad_token_id=tokenizer.pad_token_id)
         
-        decoded_preds = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-        decoded_refs = reference_texts
+            decoded_preds = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+            decoded_refs = reference_texts
 
-        preds.extend(decoded_preds)
-        refs.extend(decoded_refs)
+            preds.extend(decoded_preds)
+            refs.extend(decoded_refs)
 
     result = rouge.compute(predictions=preds, references=refs, use_stemmer=True)
     return result

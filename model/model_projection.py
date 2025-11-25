@@ -4,8 +4,11 @@ Moved from train_model script.
 """
 
 import torch
+import os
 from model.mixture_of_experts import MoEProjectionLayer, MixedMoEProjectionLayer
-from transformers import PreTrainedModel, AutoConfig, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
+from transformers import PreTrainedModel, AutoConfig, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, BartForConditionalGeneration
+from transformers.modeling_outputs import Seq2SeqLMOutput
+from transformers.models.auto.configuration_auto  import AutoConfig
 from torch import Tensor
 
 ######### Classification Wrappers #########
@@ -290,8 +293,7 @@ class CodelessWrapper(PreTrainedModel):
 
 
 ######### Summarization Wrappers #########
-
-class Seq2SeqWProjection(AutoModelForSeq2SeqLM):
+class Seq2SeqWProjection(BartForConditionalGeneration):
     """
     Class to add a small projection head to summarization model during training.
     """
@@ -306,22 +308,59 @@ class Seq2SeqWProjection(AutoModelForSeq2SeqLM):
         )
     
     def forward(self, input_ids=None, attention_mask=None, decoder_input_ids=None, decoder_attention_mask=None, labels=None, **kwargs):
-        outputs = super().forward(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
-            output_hidden_states=True,
-            **kwargs
-        )
-        last_hidden = outputs.decoder_hidden_states[-1]
-        projected = self.proj(last_hidden)
 
-        logits = self.lm_head(projected) + self.model.final_logits_bias
+        kwargs.pop("num_items_in_batch", None)
+        kwargs.pop("output_hidden_states", None)
+        kwargs.pop("return_dict", None)
+        kwargs.pop("use_cache", None)
+
+        # Force what we need
+        kwargs["output_hidden_states"] = True
+        kwargs["return_dict"] = True
+        kwargs["use_cache"] = False
+
+        if input_ids is not None:
+            kwargs["input_ids"] = input_ids
+        if attention_mask is not None:
+            kwargs["attention_mask"] = attention_mask
+        if decoder_input_ids is not None:
+            kwargs["decoder_input_ids"] = decoder_input_ids
+        if decoder_attention_mask is not None:
+            kwargs["decoder_attention_mask"] = decoder_attention_mask
+        if labels is not None:
+            kwargs["labels"] = labels
+
+        outputs = super().forward(**kwargs)
+
+        # outputs = super().forward(
+        #     input_ids=input_ids,
+        #     attention_mask=attention_mask,
+        #     decoder_input_ids=decoder_input_ids,
+        #     decoder_attention_mask=decoder_attention_mask,
+        #     labels=labels,
+        #     output_hidden_states=True,
+        #     return_dict=True,
+        #     use_cache=False,
+        #     **kwargs
+        # )
+
+        if outputs.decoder_hidden_states is None:
+            raise ValueError("Decoder hidden states are required for projection but were not returned.")
+
+        hidden = outputs.decoder_hidden_states[-1]
+        
+        projected = self.proj(hidden)
+
+        logits = self.lm_head(projected) + self.final_logits_bias
 
         loss = None
         if labels is not None:
             loss_function = torch.nn.CrossEntropyLoss(ignore_index=-100)
             loss = loss_function(logits.view(-1, logits.size(-1)), labels.view(-1))
         
-        return {"loss": loss, "logits": logits, "past_key_values": outputs.past_key_values}
+        return Seq2SeqLMOutput(
+            loss=loss,
+            logits=logits,
+            past_key_values=outputs.past_key_values,
+            encoder_last_hidden_state=outputs.encoder_last_hidden_state
+        )
