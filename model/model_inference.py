@@ -2,14 +2,15 @@
 Script for running inference based on saved model weights. Used for both classification and summarization.
 """
 
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoConfig
 from peft import PeftModel, PeftModelForSequenceClassification, PeftModelForSeq2SeqLM
 from utils.config_loader import load_config
 from data.fetch_data import load_data
-from model.model_projection import Seq2SeqWProjection
+from model.model_projection import Seq2SeqWProjection, CodelessWrapper
 import torch.nn.functional as F
 import json
 import torch
+import os
 import logging
 
 config = load_config()
@@ -27,27 +28,24 @@ def classification_prediction(text: str) -> list[str]:
         list[str]: predicted ICD-10 codes in list format
     """
 
-    base_model = config["model"]["classification_checkpoint"]
-    peft_model_path = config["model"]["classification_model_temp"]
+    model_path = config["model"]["classification_model_temp"]
 
-    tokenizer = AutoTokenizer.from_pretrained(base_model)
-    model = AutoModelForSequenceClassification.from_pretrained(base_model, num_labels=50)
-    model = PeftModel.from_pretrained(model, peft_model_path)
+    wrapper = CodelessWrapper.load_custom(model_path)
+    model = wrapper.model
+    tokenizer = wrapper.tokenizer
 
-    inputs = tokenizer(text, return_tensor="pt").to(model.device)
-    outputs = model(**inputs)
+    model.eval()
+
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512).to(model.device)
 
     with torch.no_grad():
+        outputs = model(**inputs)
         logits = outputs.logits
-    probs = torch.sigmoid(logits)
+        probs = torch.sigmoid(logits)
 
     threshold = 0.5 # modifiable prediction threshold
 
     predicted_ids = (probs > threshold).nonzero(as_tuple=True)[1].tolist()
-
-    # label_data_path = config["data"]["task_2"]["data_path"] # path to full list of labels in str form
-    # label_data = load_data(label_data_path)
-    # labels = label_data["icd_code"].tolist() # Need to move saving the label list to part of preprocessing (json file)
 
     predicted_labels = [model.config.id2label[i] for i in predicted_ids]
 
@@ -65,21 +63,26 @@ def summarization_prediction(text: str) -> str:
     """
 
     base_model = config["model"]["summarization_checkpoint"]
-    peft_model_path = config["model"]["summarization_model"]
-    
-    tokenizer = AutoTokenizer.from_pretrained(base_model)
-    base_model = Seq2SeqWProjection.from_pretrained(base_model)
-    model = PeftModel.from_pretrained(model, peft_model_path)
+    model_path = config["model"]["summarization_model"]
 
-    model = model.merge_and_unload()
+    config = AutoConfig.from_pretrained(base_model)
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
+
+    model = Seq2SeqWProjection.from_pretrained(base_model, config=config)
+
+    proj_state = torch.load(os.path.join(model_path, "proj.pt"), map_location="cpu")
+    model.proj.load_state_dict(proj_state)
+
+    model = PeftModel.from_pretrained(model, os.path.join(model_path, "peft_model"))
+
+    model.to("cuda" if torch.cuda.is_available() else "cpu")
 
     model.eval()
-    model.to("cuda" if torch.cuda.is_available() else "cpu")
 
     inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True).to(model.device)
     
     with torch.no_grad():
-        output_ids = model.generate(**inputs, max_new_tokens=200, num_beams=4, early_stopping=True)
+        output_ids = model.generate(**inputs, max_new_tokens=200, do_sample=False, pad_token_id=tokenizer.pad_token_id)
 
     return tokenizer.decode(output_ids[0], skip_special_tokens=True)
 

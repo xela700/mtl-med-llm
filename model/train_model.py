@@ -345,16 +345,12 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     else:
         raise RuntimeError("Projection head not found; ensure Seq2SeqWProjection defines self.proj")
 
-    # 1) Freeze everything first
     for n, p in model.named_parameters():
         p.requires_grad = False
 
-    # 2) Explicitly turn on requires_grad for proj (on the base model object)
     for p in proj_ref.parameters():
         p.requires_grad = True
 
-    # 3) Explicitly turn on requires_grad for any LoRA params created by PEFT
-    #    (these usually have 'lora' in their names; adapt if your PEFT version uses different prefixes)
     for n, p in model.named_parameters():
         if "lora" in n.lower():
             p.requires_grad = True
@@ -363,12 +359,6 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     model.print_trainable_parameters()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
-    
-    use_bf16 = False
-    try:
-        use_bf16 = torch.cuda.is_bf16_supported()
-    except:
-        use_bf16 = False
     
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, 
                                            padding=True, 
@@ -389,8 +379,6 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         save_total_limit=2,
         predict_with_generate=False,
         fp16=True,
-        # bf16=False,
-        # gradient_checkpointing=False,
         dataloader_num_workers=0,
         group_by_length=True
     )

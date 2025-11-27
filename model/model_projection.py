@@ -392,7 +392,6 @@ class Seq2SeqWProjection(BartForConditionalGeneration):
         kwargs.pop("return_dict", None)
         kwargs.pop("use_cache", None)
 
-        # Force what we need
         kwargs["output_hidden_states"] = True
         kwargs["return_dict"] = True
         kwargs["use_cache"] = False
@@ -409,18 +408,6 @@ class Seq2SeqWProjection(BartForConditionalGeneration):
             kwargs["labels"] = labels
 
         outputs = super().forward(**kwargs)
-
-        # outputs = super().forward(
-        #     input_ids=input_ids,
-        #     attention_mask=attention_mask,
-        #     decoder_input_ids=decoder_input_ids,
-        #     decoder_attention_mask=decoder_attention_mask,
-        #     labels=labels,
-        #     output_hidden_states=True,
-        #     return_dict=True,
-        #     use_cache=False,
-        #     **kwargs
-        # )
 
         if outputs.decoder_hidden_states is None:
             raise ValueError("Decoder hidden states are required for projection but were not returned.")
