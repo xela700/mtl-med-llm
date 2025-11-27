@@ -69,92 +69,81 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
 
     metrics_logger = MetricsLoggerCallback(output_dir=metric_dir)
 
-    for run in range(run_number):
-        print(f"Beginning run {run + 1} out of {run_number}")
+    config = AutoConfig.from_pretrained(checkpoint)
+    config.num_labels = num_labels
+    config.label2id = label2id
+    config.id2label = id2label
+    config.problem_type = "multi_label_classification"
 
-        config = AutoConfig.from_pretrained(checkpoint)
-        config.num_labels = num_labels
-        config.label2id = label2id
-        config.id2label = id2label
-        config.problem_type = "multi_label_classification"
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    base_model = AutoModelForSequenceClassification.from_pretrained(checkpoint, config=config)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True)
 
-        tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-        model = AutoModelForSequenceClassification.from_pretrained(checkpoint, config=config)
-        data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True)
+    def collate_function(batch):
+        batch_filtered = [{k: v for k, v in sample.items() if k in ["input_ids", "attention_mask", "labels"] and v is not None} for sample in batch]
+        return data_collator(batch_filtered)
 
-        def collate_function(batch):
-            batch_filtered = [{k: v for k, v in sample.items() if k in ["input_ids", "attention_mask", "labels"] and v is not None} for sample in batch]
-            return data_collator(batch_filtered)
-        
-        ia3_config = IA3Config(
-            task_type=TaskType.SEQ_CLS,
-            target_modules=["query", "key", "value", "output.dense", "intermediate.dense"],
-            feedforward_modules=["intermediate.dense"],
-            modules_to_save=None
+    lora_config = LoraConfig( # PERF tuning
+        r=32, # Increased rank from 8
+        lora_alpha=64, # quadrupled from 16 to 64
+        target_modules=["query", "value"],
+        lora_dropout=0.05, # Lowered from 0.1
+        bias="none",
+        task_type=TaskType.SEQ_CLS
+    )
+
+    peft_model = get_peft_model(model=base_model, peft_config=lora_config)
+
+    training_args = TrainingArguments(
+        output_dir=training_checkpoint_dir,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=2, # lowered batch size during eval (8 to 2)
+        eval_accumulation_steps=1, # flush intermediate evaluation results
+        num_train_epochs=15,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        logging_dir="./logs",
+        load_best_model_at_end=True,
+        metric_for_best_model="f1_macro",
+        greater_is_better=True,
+        remove_unused_columns=False,
+        fp16=True, # Uses mixed precision
+        dataloader_pin_memory=False # Reduce memory overhead
+    )
+
+    pos_weight = compute_pos_weight(train_dataset)
+
+    # Modifications to use frozen code description encoder as part of training
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    base_encoder = peft_model
+    # label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
+    model = CodelessWrapper(
+        config=config, 
+        base_encoder=base_encoder,
+        pos_weight=pos_weight,
+        active_label_mask=mask,
+        num_labels=num_labels
         )
+    # End frozen code description encoder modifications
+    metrics_logger.run_counter = 1
 
-        lora_config = LoraConfig( # PERF tuning
-            r=8, # Increased rank from 8
-            lora_alpha=16, # quadrupled from 16 to 64
-            target_modules=["query", "value"],
-            lora_dropout=0.1, # Lowered from 0.1
-            bias="none",
-            task_type=TaskType.SEQ_CLS
-        )
+    trainer = WeightedLossTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        processing_class=tokenizer,
+        data_collator=collate_function,
+        compute_metrics=classification_compute_metric,
+        pos_weight=pos_weight,
+        active_label_mask=mask,
+        callbacks=[metrics_logger, CUDACleanupCallback()] # callbacks for logging metrics and for clearing GPU memory for evaluation
+    )
 
-        model = get_peft_model(model=model, peft_config=lora_config)
+    trainer.train()
 
-        training_args = TrainingArguments(
-            output_dir=training_checkpoint_dir,
-            per_device_train_batch_size=8,
-            per_device_eval_batch_size=2, # lowered batch size during eval (8 to 2)
-            eval_accumulation_steps=1, # flush intermediate evaluation results
-            num_train_epochs=15,
-            eval_strategy="epoch",
-            save_strategy="epoch",
-            logging_dir="./logs",
-            load_best_model_at_end=True,
-            metric_for_best_model="f1_macro",
-            greater_is_better=True,
-            remove_unused_columns=False,
-            fp16=True, # Uses mixed precision
-            dataloader_pin_memory=False # Reduce memory overhead
-        )
-
-        pos_weight = compute_pos_weight(train_dataset)
-
-        # Modifications to use frozen code description encoder as part of training
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        base_encoder = model
-        label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
-        model = CodelessWrapper(
-            config=config, 
-            base_encoder=base_encoder,
-            pos_weight=pos_weight,
-            active_label_mask=mask,
-            num_labels=num_labels
-            )
-        # End frozen code description encoder modifications
-        metrics_logger.run_counter = run
-
-        trainer = WeightedLossTrainer(
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-            processing_class=tokenizer,
-            data_collator=collate_function,
-            compute_metrics=classification_compute_metric,
-            pos_weight=pos_weight,
-            active_label_mask=mask,
-            callbacks=[metrics_logger, CUDACleanupCallback()] # callbacks for logging metrics and for clearing GPU memory for evaluation
-        )
-
-        trainer.train()
-
-    model.save_pretrained(save_dir) # PEFT saved weights
+    model.save_custom(save_dir)
     tokenizer.save_pretrained(save_dir)
-    model.config.save_pretrained(save_dir)
 
 class WeightedLossTrainer(Trainer):
     """

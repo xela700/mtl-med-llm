@@ -10,6 +10,7 @@ from transformers import PreTrainedModel, AutoConfig, AutoModelForSequenceClassi
 from transformers.modeling_outputs import Seq2SeqLMOutput
 from transformers.models.auto.configuration_auto  import AutoConfig
 from torch import Tensor
+from peft import PeftModel
 
 ######### Classification Wrappers #########
 
@@ -241,6 +242,83 @@ class CodelessWrapper(PreTrainedModel):
         self.active_label_mask = (
             torch.tensor(active_label_mask, dtype=torch.float) if active_label_mask is not None else None
         )
+    
+    def save_custom(self, save_directory: str) -> None:
+        """
+        Custom save method to ensure projection head is saved along with base model.
+
+        Args:
+            save_directory (str): Directory to save the model components
+        """
+        os.makedirs(save_directory, exist_ok=True)
+        
+        # Save base encoder
+        self.base_encoder.base_model.base_model.save_pretrained(
+            os.path.join(save_directory, "base_model")
+        )
+
+        # Save LoRA adapters
+        self.base_encoder.save_pretrained(
+            os.path.join(save_directory, "lora_adapters")
+        )
+
+        # Save MoE projection head
+        torch.save(
+            self.proj.state_dict(),
+            os.path.join(save_directory, "moe_projection.pt")
+        )
+
+        # Save classifier head
+        torch.save(
+            self.classifier.state_dict(),
+            os.path.join(save_directory, "classifier_head.pt")
+        )
+
+        # Save config
+        self.config.save_pretrained(save_directory)
+    
+    @staticmethod
+    def load_custom(save_directory: str) -> "CodelessWrapper":
+        """
+        Custom load method to ensure projection head is loaded along with base model.
+
+        Args:
+            save_directory (str): Directory to load the model components from
+
+        Returns:
+            CodelessWrapper: Loaded model instance
+        """
+        # Load config
+        config = AutoConfig.from_pretrained(save_directory)
+
+        # Load base encoder
+        base_model = AutoModelForSequenceClassification.from_pretrained(
+            os.path.join(save_directory, "base_model"),
+            config=config
+        )
+
+        # Load LoRA adapters
+        peft_model = PeftModel.from_pretrained(
+            base_model,
+            os.path.join(save_directory, "lora_adapters")
+        )
+
+        # Initialize wrapper
+        wrapper = CodelessWrapper(
+            config=config,
+            base_encoder=peft_model,
+            num_labels=config.num_labels
+        )
+
+        # Load MoE projection head
+        moe_path = os.path.join(save_directory, "moe_projection.pt")
+        wrapper.proj.load_state_dict(torch.load(moe_path, map_location="cpu"))
+
+        # Load classifier head
+        classifier_path = os.path.join(save_directory, "classifier_head.pt")
+        wrapper.classifier.load_state_dict(torch.load(classifier_path, map_location="cpu"))
+
+        return wrapper
 
     def forward(self, input_ids: list[list[int]] = None, attention_mask: list[list[int]] = None, token_type_ids: list[int] = None, labels: Tensor = None) -> dict[float:list[float]]:
         """
