@@ -31,16 +31,17 @@ def classification_prediction(text: str) -> list[str]:
     model_path = config["model"]["classification_model_temp"]
 
     wrapper = CodelessWrapper.load_custom(model_path)
-    model = wrapper.to("cuda" if torch.cuda.is_available() else "cpu")
+    model = wrapper
     model.eval()
     tokenizer = AutoTokenizer.from_pretrained(model_path)
 
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512).to(model.device)
 
     with torch.no_grad():
-        outputs = model(**inputs)
-        logits = outputs.logits
-        probs = torch.sigmoid(logits)
+        outputs = wrapper(**inputs)
+        logits = outputs["logits"] if isinstance(outputs, dict) else outputs.logits
+    
+    probs = torch.sigmoid(logits)
 
     threshold = 0.5 # modifiable prediction threshold
 
@@ -64,15 +65,15 @@ def summarization_prediction(text: str) -> str:
     base_model = config["model"]["summarization_checkpoint"]
     model_path = config["model"]["summarization_model"]
 
-    config = AutoConfig.from_pretrained(base_model)
+    # model_config = AutoConfig.from_pretrained(base_model)
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
-    model = Seq2SeqWProjection.from_pretrained(base_model, config=config)
+    model = Seq2SeqWProjection.from_pretrained(base_model)
+
+    model = PeftModel.from_pretrained(model, os.path.join(model_path, "peft_model"))
 
     proj_state = torch.load(os.path.join(model_path, "proj.pt"), map_location="cpu")
     model.proj.load_state_dict(proj_state)
-
-    model = PeftModel.from_pretrained(model, os.path.join(model_path, "peft_model"))
 
     model.to("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -145,11 +146,13 @@ def model_routing_pipeline(texts: list[str]) -> None:
             logger.info("Intent to classify ICD codes found.")
             predicted_codes = classification_prediction(input)
             print(f"Predicted ICD-10 codes for clinical note: {predicted_codes}")
+            return predicted_codes
         
         elif intent == "summarization":
             logger.info("Intent to summarize clinical note found.")
             generated_summary = summarization_prediction(input)
             print(f"Following summary generated: {generated_summary}")
+            return generated_summary
 
         else: # Should not happen
             logger.error(f"Intent target must be either classification or summarization. Got {intent}.")

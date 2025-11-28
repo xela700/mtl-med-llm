@@ -7,7 +7,7 @@ import torch
 import os
 from model.mixture_of_experts import MoEProjectionLayer, MixedMoEProjectionLayer
 from transformers import PreTrainedModel, AutoConfig, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, BartForConditionalGeneration
-from transformers.modeling_outputs import Seq2SeqLMOutput
+from transformers.modeling_outputs import Seq2SeqLMOutput, SequenceClassifierOutput
 from transformers.models.auto.configuration_auto  import AutoConfig
 from torch import Tensor
 from peft import PeftModel
@@ -290,10 +290,11 @@ class CodelessWrapper(PreTrainedModel):
         """
         # Load config
         config = AutoConfig.from_pretrained(save_directory)
+        num_labels = config.num_labels
 
         # Load base encoder
         base_model = AutoModelForSequenceClassification.from_pretrained(
-            os.path.join(save_directory, "base_model"),
+            config._name_or_path,
             config=config
         )
 
@@ -307,7 +308,7 @@ class CodelessWrapper(PreTrainedModel):
         wrapper = CodelessWrapper(
             config=config,
             base_encoder=peft_model,
-            num_labels=config.num_labels
+            num_labels=num_labels
         )
 
         # Load MoE projection head
@@ -367,7 +368,10 @@ class CodelessWrapper(PreTrainedModel):
         
             loss = loss_matrix.mean()
         
-        return {k: v for k, v in {"loss": loss, "logits": logits}.items() if v is not None}
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=logits
+        )
 
 
 ######### Summarization Wrappers #########

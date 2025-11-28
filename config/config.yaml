@@ -98,6 +98,7 @@ results:
   classification2_wo_code_Mixed_MoE: results/reporting/classification2_wo_code_Mixed_MoE
   classification2_wo_code_Mixed_MoE_8: results/reporting/classification2_wo_code_Mixed_MoE_8
   classification_wo_code_LORA_high_cap_Mixed_MoE_8_save: results/reporting/classification_wo_code_LORA_high_cap_Mixed_MoE_8_save
+  classification_wo_code_LORA_high_cap_Mixed_MoE_8_save_det: results/reporting/classification_wo_code_LORA_high_cap_Mixed_MoE_8_save_det
 
   intent_targeting: results/reporting/intent_targeting
   intent_targeting_mod_data: results/reporting/intent_targeting_mod_data
