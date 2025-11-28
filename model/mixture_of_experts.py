@@ -96,8 +96,8 @@ class MixedMoEProjectionLayer(nn.Module):
         self.experts = nn.ModuleList()
         for i in range(num_experts):
             activation = activations[i % len(activations)]
-            depth = random.choice(depths)
-            scale = random.choice(hidden_scales)
+            depth = depths[i % len(depths)]
+            scale = hidden_scales[i % len(hidden_scales)]
             hid_dim = int(hidden_dim * scale)
 
             layers = []
@@ -136,8 +136,11 @@ class MixedMoEProjectionLayer(nn.Module):
         gate_scores = gate_scores / (gate_scores.sum(dim=-1, keepdim=True) + 1e-9)
 
         outputs = []
-        for i, expert in enumerate(self.experts):
-            expert_out = expert(x)
-            outputs.append(expert_out * gate_scores[:, i].unsqueeze(-1))
+        for b in range(x.size(0)):
+            sample_output = 0
+            for idx, g in zip(top_k_index[b], top_k_vals[b]):
+                expert_output = self.experts[idx](x[b].unsqueeze(0))
+                sample_output += g * expert_output
+            outputs.append(sample_output)
         
-        return torch.stack(outputs, dim=0).sum(dim=0)
+        return torch.cat(outputs, dim=0)

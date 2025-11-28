@@ -31,10 +31,9 @@ def classification_prediction(text: str) -> list[str]:
     model_path = config["model"]["classification_model_temp"]
 
     wrapper = CodelessWrapper.load_custom(model_path)
-    model = wrapper.model
-    tokenizer = wrapper.tokenizer
-
+    model = wrapper.to("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
 
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512).to(model.device)
 
