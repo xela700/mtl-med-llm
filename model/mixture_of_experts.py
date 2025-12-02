@@ -103,7 +103,6 @@ class MixedMoEProjectionLayer(nn.Module):
             layers = []
             in_dim = input_dim
 
-            # partially random construction
             for j in range(depth):
                 layers.append(nn.Linear(in_dim, hid_dim))
                 layers.append(activation())

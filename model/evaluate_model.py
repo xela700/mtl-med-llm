@@ -39,6 +39,28 @@ class MetricsLoggerCallback(TrainerCallback):
         with open(file_path, "w") as f:
             json.dump(metrics, f, indent=2)
 
+class EpochLossCallback(TrainerCallback):
+    """
+    Custom HuggingFace Callback designed to log training loss at the end of each epoch.
+    """
+    def __init__(self, json_log_path: str):
+        self.json_log_path = json_log_path
+        self.losses = []
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        for record in state.log_history[::-1]:
+            if "loss" in record:
+                self.losses.append({
+                    "epoch": record.get("epoch"),
+                    "loss": record.get("loss")
+                })
+                break
+    
+    def on_train_end(self, args, state, control, **kwargs):
+        with open(self.json_log_path, "w") as f:
+            json.dump(self.losses, f, indent=2)
+        print(f"\n[Epoch Loss Logger] Training losses saved to {self.json_log_path}")
+
 class CUDACleanupCallback(TrainerCallback):
     """
     Custom HuggingFace Callback designed to release unoccupied GPU resources at the end of each

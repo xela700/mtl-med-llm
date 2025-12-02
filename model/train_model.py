@@ -7,18 +7,17 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, Auto
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
-from peft import get_peft_model, LoraConfig, TaskType, IA3Config
+from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
-from model.evaluate_model import classification_compute_metric, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback, CUDACleanupCallback
-from model.model_projection import CodeDescriptionWrapper, TrainableCodeDescriptionWrapper, CodelessWrapper, Seq2SeqWProjection
+from model.evaluate_model import classification_compute_metric, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback, CUDACleanupCallback, EpochLossCallback
+from model.model_projection import SeqClassWProjection, Seq2SeqWProjection
 import torch
 import numpy as np
 import json
 import logging
 import os
 from torch import Tensor
-from torch.utils.data import DataLoader
 from datasets import Dataset, DatasetDict
 from typing import Union, Dict, Tuple
 from pathlib import Path
@@ -117,7 +116,7 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
     device = "cuda" if torch.cuda.is_available() else "cpu"
     base_encoder = peft_model
     # label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
-    model = CodelessWrapper(
+    model = SeqClassWProjection(
         config=config, 
         base_encoder=base_encoder,
         pos_weight=pos_weight,
@@ -390,7 +389,8 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         eval_dataset=val_dataset,
         processing_class=tokenizer,
         data_collator=data_collator,
-        compute_metrics=None
+        compute_metrics=None,
+        callbacks=[EpochLossCallback(os.path.join(metric_dir, "epoch_losses.json"))] # logging epoch loss
     )
     
     trainer.train()

@@ -6,7 +6,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Auto
 from peft import PeftModel, PeftModelForSequenceClassification, PeftModelForSeq2SeqLM
 from utils.config_loader import load_config
 from data.fetch_data import load_data
-from model.model_projection import Seq2SeqWProjection, CodelessWrapper
+from model.model_projection import Seq2SeqWProjection, SeqClassWProjection
 import torch.nn.functional as F
 import json
 import torch
@@ -30,7 +30,7 @@ def classification_prediction(text: str) -> list[str]:
 
     model_path = config["model"]["classification_model_temp"]
 
-    wrapper = CodelessWrapper.load_custom(model_path)
+    wrapper = SeqClassWProjection.load_custom(model_path)
     model = wrapper
     model.eval()
     tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -65,7 +65,6 @@ def summarization_prediction(text: str) -> str:
     base_model = config["model"]["summarization_checkpoint"]
     model_path = config["model"]["summarization_model"]
 
-    # model_config = AutoConfig.from_pretrained(base_model)
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
     model = Seq2SeqWProjection.from_pretrained(base_model)

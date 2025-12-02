@@ -103,3 +103,5 @@ results:
   intent_targeting: results/reporting/intent_targeting
   intent_targeting_mod_data: results/reporting/intent_targeting_mod_data
   intent_targeting_mod_data_low_lr: results/reporting/intent_targeting_mod_data_low_lr
+
+  test_summarization: results/reporting/test_summarization

@@ -205,7 +205,7 @@ class TrainableCodeDescriptionWrapper(PreTrainedModel):
         
         return {k: v for k, v in {"loss": loss, "logits": logits}.items() if v is not None}
 
-class CodelessWrapper(PreTrainedModel):
+class SeqClassWProjection(PreTrainedModel):
     """
     Modified wrapper for classification model that omits dot product similarity calculations with model outputs.
     Created to confirm if the code description embeddings are creating a bottleneck.
@@ -278,7 +278,7 @@ class CodelessWrapper(PreTrainedModel):
         self.config.save_pretrained(save_directory)
     
     @staticmethod
-    def load_custom(save_directory: str) -> "CodelessWrapper":
+    def load_custom(save_directory: str) -> "SeqClassWProjection":
         """
         Custom load method to ensure projection head is loaded along with base model.
 
@@ -305,7 +305,7 @@ class CodelessWrapper(PreTrainedModel):
         )
 
         # Initialize wrapper
-        wrapper = CodelessWrapper(
+        wrapper = SeqClassWProjection(
             config=config,
             base_encoder=peft_model,
             num_labels=num_labels
