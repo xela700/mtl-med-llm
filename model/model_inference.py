@@ -29,6 +29,10 @@ def classification_prediction(text: str) -> list[str]:
     """
 
     model_path = config["model"]["classification_model_temp"]
+    code_desc_path = config["data"]["task_5"]["label_description_path"]
+
+    with open(code_desc_path, "r") as file:
+        code_descriptions = json.load(file)
 
     wrapper = SeqClassWProjection.load_custom(model_path)
     model = wrapper
@@ -49,7 +53,13 @@ def classification_prediction(text: str) -> list[str]:
 
     predicted_labels = [model.config.id2label[i] for i in predicted_ids]
 
-    return predicted_labels
+    results = []
+
+    for code in predicted_labels:
+        description = code_descriptions.get(code, "No description available.")
+        results.append(f"{code}: {description}")
+
+    return "   ".join(results)
 
 def summarization_prediction(text: str) -> str:
     """

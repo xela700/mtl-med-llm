@@ -5,6 +5,7 @@ API setup for demoing model pipeline
 import torch
 import numpy as np
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from model.model_inference import model_routing_pipeline
 
@@ -24,3 +25,31 @@ def infer(request: InferenceRequest):
         result = result.tolist()
 
     return {"result": result}
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return """
+    <html>
+    <body>
+        <h1>Biomedical Multi-Model LLM Demo</h1>
+        <textarea id="input" rows="8" cols="80"></textarea><br>
+        <button onclick="sendRequest()">Run Model</button>
+        <h3>Output:</h3>
+        <pre id="output"></pre>
+
+    <script>
+        async function sendRequest() {
+            const input = document.getElementById('input').value;
+            const response = await fetch('/infer', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: input})
+            });
+            const data = await response.json();
+            document.getElementById('output').textContent += 
+                JSON.stringify(data) + "\\n\\n"; // <-- append, don't overwrite
+        }
+    </script>
+    </body>
+    </html>
+    """
