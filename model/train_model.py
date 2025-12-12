@@ -389,8 +389,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
         eval_dataset=val_dataset,
         processing_class=tokenizer,
         data_collator=data_collator,
-        compute_metrics=None,
-        callbacks=[EpochLossCallback(os.path.join(metric_dir, "epoch_losses.json"))] # logging epoch loss
+        compute_metrics=None
     )
     
     trainer.train()

@@ -4,6 +4,7 @@ from sklearn.metrics import (
 )
 from evaluate import load
 from transformers import TrainerCallback, AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers.training_args import TrainingArguments, TrainerState, TrainerControl, EvalPrediction
 from datasets import Dataset
 import json
 import os
@@ -11,6 +12,7 @@ import numpy as np
 import torch
 import logging
 from tqdm import tqdm
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +27,20 @@ class MetricsLoggerCallback(TrainerCallback):
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         self.run_counter = 0
-    
-    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
-        
+
+    def on_evaluate(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, metrics: Dict[str, float] = None, **kwargs) -> None:
+        """
+        Event called at the end of an evaluation phase to dump the metrics into a JSON file.
+
+        Args:
+            args (TrainingArguments): training arguments
+            state (TrainerState): current state of the trainer
+            control (TrainerControl): trainer control
+            metrics (Dict[str, float], optional): evaluation metrics. Defaults to None.
+
+        Returns:
+            None
+        """
         if metrics is None:
             return
         
@@ -39,39 +52,28 @@ class MetricsLoggerCallback(TrainerCallback):
         with open(file_path, "w") as f:
             json.dump(metrics, f, indent=2)
 
-class EpochLossCallback(TrainerCallback):
-    """
-    Custom HuggingFace Callback designed to log training loss at the end of each epoch.
-    """
-    def __init__(self, json_log_path: str):
-        self.json_log_path = json_log_path
-        self.losses = []
-
-    def on_epoch_end(self, args, state, control, **kwargs):
-        for record in state.log_history[::-1]:
-            if "loss" in record:
-                self.losses.append({
-                    "epoch": record.get("epoch"),
-                    "loss": record.get("loss")
-                })
-                break
-    
-    def on_train_end(self, args, state, control, **kwargs):
-        with open(self.json_log_path, "w") as f:
-            json.dump(self.losses, f, indent=2)
-        print(f"\n[Epoch Loss Logger] Training losses saved to {self.json_log_path}")
-
 class CUDACleanupCallback(TrainerCallback):
     """
     Custom HuggingFace Callback designed to release unoccupied GPU resources at the end of each
     epoch. Hopefully minimizes OOM errors.
     """
-    def on_epoch_end(self, args, state, control, **kwargs):
+    def on_epoch_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> TrainerControl:
+        """
+        Event called at the end of an epoch to clear the CUDA cache.
+
+        Args:
+            args (TrainingArguments): training arguments
+            state (TrainerState): current state of the trainer
+            control (TrainerControl): trainer control
+
+        Returns:
+            TrainerControl: trainer control
+        """
         torch.cuda.empty_cache()
         print(f"\n[Memory Cleanup] GPU cache cleared at end of epoch {state.epoch:.0f}")
         return control
 
-def classification_compute_metric(eval_preds) -> dict[str:float]:
+def classification_compute_metric(eval_preds: EvalPrediction) -> Dict[str:float]:
     """
     Method for use in model training to evaluation performance. Includes accuracy, F1 (micro & macro), precision, recall, hamming loss and ROC-AUC (micro & macro)
 
@@ -116,41 +118,7 @@ def classification_compute_metric(eval_preds) -> dict[str:float]:
     
     return metrics
 
-class SummarizationMetrics:
-
-    def __init__(self, tokenizer: AutoTokenizer):
-        self.tokenizer = tokenizer
-        self.rouge = load("rouge")
-        self.bertscore = load("bertscore")
-
-    def __call__(self, eval_preds):
-        """
-        Method for use in model training to evaluation performance. Includes ROUGE-L and BERT Score F1.
-
-        Args:
-            eval_preds (transformers.EvalPrediction): logits and labels for computing metrics
-    
-        Returns:
-            dict[str:float]: metrics based on evaluations
-        """
-        predictions, labels = eval_preds
-        labels = np.where(labels == -100, self.tokenizer.pad_token_id, labels)
-
-        decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
-        decoded_labels = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
-
-        decoded_preds = [pred.strip() for pred in decoded_preds]
-        decoded_labels = [label.strip() for label in decoded_labels]
-
-        rouge_results = self.rouge.compute(predictions=decoded_preds, references=decoded_labels, rouge_types=["rougeL"], use_stemmer=True)
-        bert_results = self.bertscore.compute(predictions=decoded_preds, references=decoded_labels, lang="en")
-
-        return {
-            "rougeL": rouge_results["rougeL"].mid.fmeasure * 100,
-            "bertscore_f1": np.mean(bert_results["f1"]) * 100
-        }
-
-def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: AutoTokenizer, batch_size: int = 8, device: str = "cuda", max_gen_length: int = 256) -> dict[str:float]:
+def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: AutoTokenizer, batch_size: int = 8, device: str = "cuda", max_gen_length: int = 256) -> Dict[str:float]:
     """
     Used to evaluate the summarization model on ROUGE between epochs using the current checkpoint.
     Substitute for running evaluations during model training (GPU resource conservation)
@@ -202,7 +170,7 @@ def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: Aut
     result = rouge.compute(predictions=preds, references=refs, use_stemmer=True)
     return result
 
-def intent_compute_metrics(eva_pred):
+def intent_compute_metrics(eva_pred: EvalPrediction) -> Dict[str:float]:
     """
     Method for use in model training to evaluation performance. Includes accuracy.
 
