@@ -73,7 +73,7 @@ class CUDACleanupCallback(TrainerCallback):
         print(f"\n[Memory Cleanup] GPU cache cleared at end of epoch {state.epoch:.0f}")
         return control
 
-def classification_compute_metric(eval_preds: EvalPrediction) -> Dict[str:float]:
+def classification_compute_metric(eval_preds: EvalPrediction) -> Dict[str, float]:
     """
     Method for use in model training to evaluation performance. Includes accuracy, F1 (micro & macro), precision, recall, hamming loss and ROC-AUC (micro & macro)
 
@@ -118,7 +118,7 @@ def classification_compute_metric(eval_preds: EvalPrediction) -> Dict[str:float]
     
     return metrics
 
-def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: AutoTokenizer, batch_size: int = 8, device: str = "cuda", max_gen_length: int = 256) -> Dict[str:float]:
+def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: AutoTokenizer, batch_size: int = 8, device: str = "cuda", max_gen_length: int = 256) -> Dict[str, float]:
     """
     Used to evaluate the summarization model on ROUGE between epochs using the current checkpoint.
     Substitute for running evaluations during model training (GPU resource conservation)
@@ -170,7 +170,7 @@ def rouge_metrics(model: AutoModelForSeq2SeqLM, dataset: Dataset, tokenizer: Aut
     result = rouge.compute(predictions=preds, references=refs, use_stemmer=True)
     return result
 
-def intent_compute_metrics(eva_pred: EvalPrediction) -> Dict[str:float]:
+def intent_compute_metrics(eva_pred: EvalPrediction) -> Dict[str, float]:
     """
     Method for use in model training to evaluation performance. Includes accuracy.
 

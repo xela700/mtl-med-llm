@@ -1,12 +1,14 @@
 """
 Script for running inference based on saved model weights. Used for both classification and summarization.
+
+Input -> Intent Prediction -> Classification or Summarization Model -> Output
 """
 
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoConfig
-from peft import PeftModel, PeftModelForSequenceClassification, PeftModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from peft import PeftModel
 from utils.config_loader import load_config
-from data.fetch_data import load_data
 from model.model_projection import Seq2SeqWProjection, SeqClassWProjection
+from typing import List
 import torch.nn.functional as F
 import json
 import torch
@@ -16,7 +18,7 @@ import logging
 config = load_config()
 logger = logging.getLogger(__name__)
 
-def classification_prediction(text: str) -> list[str]:
+def classification_prediction(text: str) -> List[str]:
     """
     Takes clinical note input and makes predictions of possible ICD-10 code labels using
     fine-tuned classification LLM.
@@ -127,10 +129,12 @@ def intent_prediction(text: str) -> str:
     return id2label[prediction]
 
 
-def model_routing_pipeline(texts: list[str]) -> None:
+def model_routing_pipeline(texts: List[str]) -> None:
     """
     Takes text or list of texts through pipeline.
     Intent prediction -> either classification or summarization -> output
+
+    ### Need to work on handling both single string and list of strings input.
 
     Args:
         texts list[str]: text(s) to feed into pipeline and return either associated ICD-10 codes (classification) or a summary of the clinical note (summarization).

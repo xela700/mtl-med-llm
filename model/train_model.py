@@ -3,10 +3,12 @@ Module to set up training tasks for all NLP models.
 """
 
 from pyexpat import model
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, AutoModel
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, AutoModel, TrainerCallback
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
+from transformers.trainer_utils import EvalPrediction
+from transformers.modeling_utils import PreTrainedModel
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
@@ -19,11 +21,13 @@ import logging
 import os
 from torch import Tensor
 from datasets import Dataset, DatasetDict
-from typing import Union, Dict, Tuple
+from typing import Union, Dict, Tuple, List, Callable, Any, Type
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
+### Classification Training Pipeline ###
 def classification_model_training(data_dir: str, label_mapping_dir: str, active_labels_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str, run_number: int = 1) -> None:
     """
     Training method for fine-tuning a pre-trained encoder model on ICD-10 code
@@ -83,10 +87,10 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
         return data_collator(batch_filtered)
 
     lora_config = LoraConfig( # PERF tuning
-        r=32, # Increased rank from 8
-        lora_alpha=64, # quadrupled from 16 to 64
+        r=32,
+        lora_alpha=64,
         target_modules=["query", "value"],
-        lora_dropout=0.05, # Lowered from 0.1
+        lora_dropout=0.05,
         bias="none",
         task_type=TaskType.SEQ_CLS
     )
@@ -112,18 +116,16 @@ def classification_model_training(data_dir: str, label_mapping_dir: str, active_
 
     pos_weight = compute_pos_weight(train_dataset)
 
-    # Modifications to use frozen code description encoder as part of training
     device = "cuda" if torch.cuda.is_available() else "cpu"
     base_encoder = peft_model
-    # label_embeds = torch.load("model/saved_model/class_label_embeds/label_embeddings.pt").to(device)
     model = SeqClassWProjection(
         config=config, 
         base_encoder=base_encoder,
         pos_weight=pos_weight,
         active_label_mask=mask,
         num_labels=num_labels
-        )
-    # End frozen code description encoder modifications
+        ).to(device)
+    
     metrics_logger.run_counter = 1
 
     trainer = WeightedLossTrainer(
@@ -150,7 +152,22 @@ class WeightedLossTrainer(Trainer):
     Only used with trainer for classification. 
     """
 
-    def __init__(self, pos_weight=None, active_label_mask=None, model = None, args = None, data_collator = None, train_dataset = None, eval_dataset = None, processing_class = None, model_init = None, compute_loss_func = None, compute_metrics = None, callbacks = None, optimizers = (None, None), optimizer_cls_and_kwargs = None, preprocess_logits_for_metrics = None):
+    def __init__(self, 
+                 pos_weight: Tensor = None, 
+                 active_label_mask: List[int] = None, 
+                 model: SeqClassWProjection = None, 
+                 args: TrainingArguments = None, 
+                 data_collator: DataCollatorWithPadding = None, 
+                 train_dataset: Dataset = None, 
+                 eval_dataset: Dataset = None, 
+                 processing_class: AutoTokenizer = None, 
+                 model_init: Callable[[], PreTrainedModel] = None, 
+                 compute_loss_func: Callable[[torch.nn.Module, Dict[str, Tensor]], torch.Tensor] = None, 
+                 compute_metrics: Callable[[EvalPrediction], Dict[str, float]] = None, 
+                 callbacks: List[TrainerCallback] = None, 
+                 optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None), 
+                 optimizer_cls_and_kwargs: Tuple[Type[torch.optim.Optimizer], Dict[str, Any]] | None = None, 
+                 preprocess_logits_for_metrics: Callable[[Tensor, Tensor], Tensor] | None = None):
         super().__init__(model, args, data_collator, train_dataset, eval_dataset, processing_class, model_init, compute_loss_func, compute_metrics, callbacks, optimizers, optimizer_cls_and_kwargs, preprocess_logits_for_metrics)
                 
         self.pos_weight = (
@@ -166,7 +183,7 @@ class WeightedLossTrainer(Trainer):
             reduction="none"
         )  
 
-    def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False, **kwargs) -> Union[Tensor, Tuple[Tensor, SequenceClassifierOutput]]:
+    def compute_loss(self, model: AutoModelForSequenceClassification, inputs: Dict[str, Tensor], return_outputs:bool=False, **kwargs) -> Tensor | Tuple[Tensor, SequenceClassifierOutput]:
         """
         Compute loss function that provides new loss function based on positive class weights.
 
@@ -217,84 +234,8 @@ def compute_pos_weight(dataset: Dataset) -> Tensor:
     pos_weight = negative_counts / (positive_counts + 1e-5)
     return torch.tensor(pos_weight, dtype=torch.float32)
 
-def code_classification_model_setup(checkpoint: str, code_label_map: str, code_desc_map: str, label_embeddings_dir: str) -> None:
-    """
-    Creates label embeddings based on code descriptions for use during classification training.
-    Embeddings are created once and saved for reference during training.
 
-    Args:
-        checkpoint (str): checkpoint for the HF tokenizer/model
-        code_label_map (str): directory locaton for the label2id and id2label for the active labels
-        code_desc_map (str): directory location for the code: description map for active labels
-        label_embeddings_dir (str): directory where the embeddings will be saved
-    """
-    try:
-        with open(code_label_map) as f:
-            mappings = json.load(f)
-    except FileNotFoundError:
-        logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
-    
-    id2label = {int(k): v for k, v in mappings["id2label"].items()}
-
-    try:
-        with open(code_desc_map) as f:
-            code2desc = json.load(f)
-    except FileNotFoundError:
-        logger.error("JSON file for mapping does not exist. Must preprocess data before training.")
-
-    def check_description(code: str, code2desc: dict[str:str]) -> str:
-        """
-        Small check to attempt to capture all relevant codes. Sometimes codes with a "0" at the end have
-        the character dropped. This attempts to account for that.
-
-        Args:
-            code (str): code being checked
-            code2desc (dict[str:str]): larger code dictionary with all active codes (and full code numbers)
-        
-        Returns:
-            str: code, if in the dict; code + 0, if in the dict with an added 0; 'No description available' if neither
-        """
-        if code in code2desc:
-            return code2desc[code]
-        if (code + "0") in code2desc:
-            return code2desc[code + "0"]
-        
-        print(f"Warning: no description for code {code}")
-        return "No description available"
-    
-    descriptions = [check_description(code=id2label[i], code2desc=code2desc) for i in range(len(id2label))]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-    frozen_encoder = AutoModel.from_pretrained(checkpoint).to(device)
-
-    for param in frozen_encoder.parameters():
-        param.requires_grad = False
-    frozen_encoder.eval()
-
-    label_embeds = encode_labels(descriptions=descriptions, tokenizer=tokenizer, encoder=frozen_encoder, device=device)
-    torch.save(label_embeds.cpu(), label_embeddings_dir)
-
-def encode_labels(descriptions: list[str], tokenizer: AutoTokenizer, encoder: AutoModelForSequenceClassification, device: str) -> Tensor:
-        """
-        Encodes labels based on code descriptions using the same base encoder as for standard training.
-
-        Args:
-            descriptions (list[str]): List of code descriptions
-            tokenizer (AutoTokenizer): Tokenizer for the model
-            encoder (AutoModelForSequenceClassification): Same base model as the classification model
-            device (str): cuda or cpu
-        
-        Returns:
-            Tensor: a tensor of the normalized outputs; dimension size = 1
-        """
-        inputs = tokenizer(descriptions, padding=True, truncation=True, return_tensors="pt").to(device)
-        with torch.no_grad():
-            outputs = encoder(**inputs)
-            pooled = outputs.last_hidden_state.mean(dim=1) # uses mean pooling
-        return torch.nn.functional.normalize(pooled, dim=1)
-
-
+### Summarization Training Pipeline ###
 def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, test_data_dir: str, metric_dir: str) -> None:
     """
     Training method for fine-tuning a pre-trained encoder-decoder model on clinical note summarization task.
@@ -326,10 +267,10 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     base_model = Seq2SeqWProjection.from_pretrained(checkpoint, config=config) # modified to use projection head
 
     lora_config = LoraConfig( # PERF tuning
-        r=32, # 8 -> 32
-        lora_alpha=64, # changed from 16 to 64
+        r=32,
+        lora_alpha=64,
         target_modules="all-linear",
-        lora_dropout=0.05, # 0.1 -> 0.05
+        lora_dropout=0.05,
         bias="none",
         task_type=TaskType.SEQ_2_SEQ_LM
     )
@@ -344,6 +285,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     else:
         raise RuntimeError("Projection head not found; ensure Seq2SeqWProjection defines self.proj")
 
+    # Freezing all model parameters except LoRA adapters and projection head
     for n, p in model.named_parameters():
         p.requires_grad = False
 
@@ -355,7 +297,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
             p.requires_grad = True
 
     
-    model.print_trainable_parameters()
+    model.print_trainable_parameters() # to verify only LoRA and proj are trainable
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     
@@ -394,22 +336,22 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     
     trainer.train()
 
-    # # Modifying summarization training to halt training every epoch to evaluate on ROUGE
-    # num_epochs = 10
-    # for epoch in range(num_epochs):
-    #     print(f"Starting epoch {epoch+1} out of {num_epochs}")
+    # Summarization training halts every epoch to evaluate on ROUGE
+    num_epochs = 10
+    for epoch in range(num_epochs):
+        print(f"Starting epoch {epoch+1} out of {num_epochs}")
 
-    #     trainer.train()
+        trainer.train()
 
-    #     trainer.save_model(f"{training_checkpoint_dir}/epoch_{epoch+1}") # saving checkpoint
+        trainer.save_model(f"{training_checkpoint_dir}/epoch_{epoch+1}") # saving checkpoint
 
-    #     metrics = rouge_metrics(model, val_dataset, tokenizer) # all rouge metrics
-    #     print(f"Epoch {epoch+1} ROUGE-L:", metrics["rougeL"])
+        metrics = rouge_metrics(model, val_dataset, tokenizer) # all rouge metrics
+        print(f"Epoch {epoch+1} ROUGE-L:", metrics["rougeL"])
 
-    #     with open(metric_dir, "a") as f:
-    #         f.write(json.dumps({"epoch": epoch+1, **metrics}) + "\n")
+        with open(metric_dir, "a") as f:
+            f.write(json.dumps({"epoch": epoch+1, **metrics}) + "\n")
         
-    #     torch.cuda.empty_cache() # freeing GPU resources for training restart
+        torch.cuda.empty_cache() # freeing GPU resources for training restart
 
     # Saving base model and tokenizer
     base_save_dir = os.path.join(save_dir, "base_model")
@@ -429,6 +371,7 @@ def summarization_model_training(data_dir: str, checkpoint: str, save_dir: str, 
     print("Saved base model, tokenizer, PEFT weights, and projection head.")
 
 
+### Intent Targeting Training Pipeline ###
 def intent_model_training(dataset_dir: str, label_dir: str, checkpoint: str, save_dir: str, training_checkpoint_dir: str, metric_dir: str) -> None:
     """
     Training pipeline for intent targeting (between classification and summarization for now).
