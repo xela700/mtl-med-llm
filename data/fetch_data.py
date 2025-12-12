@@ -47,7 +47,6 @@ def fetch_and_save_query(query: str, save_path: str = None) -> None:
         logger.info(f"Warning: {save_path} exists and will be overwritten with new query.")
 
     try:
-        # query_job = client.query(query=query)
         df = client.query(query=query).to_dataframe(create_bqstorage_client=True)
         df.to_parquet(save_path)
         logger.info(f"Saved data to {save_path}")

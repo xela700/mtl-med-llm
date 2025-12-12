@@ -10,7 +10,6 @@ import numpy as np
 import os
 import shutil
 import torch
-import random
 import json
 from tqdm import tqdm
 from pathlib import Path
@@ -18,9 +17,9 @@ from datasets import Dataset, DatasetDict
 from abc import ABC, abstractmethod
 from transformers import AutoTokenizer, pipeline, AutoModelForSeq2SeqLM
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
-from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
+from typing import Dict, List
 
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,7 @@ class TextPreprocessor(ABC):
 
     __slots__ = ("tokenizer", "text_col", "remove_sections", "cleaned_path")
 
-    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, remove_sections: list[str] = None):
+    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, remove_sections: List[str] = None):
         self.tokenizer = self._create_tokenizer(checkpoint)
         self.text_col = text_col
         self.remove_sections = remove_sections
@@ -159,7 +158,6 @@ class TextPreprocessor(ABC):
         pass
     
 
-
 class ClassificationPreprocessor(TextPreprocessor):
     """
     Preprocessor child class for classification training pipeline for use with encoder models.
@@ -175,7 +173,7 @@ class ClassificationPreprocessor(TextPreprocessor):
 
     __slots__ = ("label_ids", "extract_sections", "label_col", "data_collator")
 
-    def __init__(self, checkpoint: str, label_ids: dict[str:int], text_col: str, label_col: str, cleaned_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
+    def __init__(self, checkpoint: str, label_ids: Dict[str:int], text_col: str, label_col: str, cleaned_path: str, remove_sections: List[str] = None, extract_sections: List[str] = None):
         super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.extract_sections = extract_sections
         self.label_ids = label_ids
@@ -220,7 +218,7 @@ class ClassificationPreprocessor(TextPreprocessor):
         return ' '.join(extracted)
     
 
-    def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
+    def preprocess_function(self, batch: Dict[str, List[str]]) -> Dict[str, List[int]]:
         """
         Preprocess function to be mapped using dataset specific to classification task.
         To be used with dataset.map() method.
@@ -251,6 +249,7 @@ class ClassificationPreprocessor(TextPreprocessor):
                     label_vector[idx] = 1.0
             multi_hot_labels.append(label_vector)
 
+        # check to ensure label count matches batch size
         assert len(multi_hot_labels) == len(batch[self.text_col]), "Label count doesn't match batch size!"
 
         tokenized_data["labels"] = multi_hot_labels
@@ -258,7 +257,7 @@ class ClassificationPreprocessor(TextPreprocessor):
         return tokenized_data
     
 
-    def filter_text_by_label(self, batch: dict[str, list[str]]) -> list[bool]:
+    def filter_text_by_label(self, batch: Dict[str, List[str]]) -> List[bool]:
         """
         Filtering method to check for the presence of one (or more) ICD labels that are being used during
         training. To be used with dataset.filter() method
@@ -403,105 +402,7 @@ class ClassificationPreprocessor(TextPreprocessor):
 
         if save_dir:
             self.tokenizer.save_pretrained(save_directory=save_dir)
-    
-        
-class CodePreprocessor(TextPreprocessor):
-    """
-    Preprocessor for ICD-10 code descriptions for use with encoder model as a component of classification.
-
-    Attributes:
-        label_ids (dict[str:int]): Separate label-specific query. Current plan to use initial dataset and group by
-        ICD-10 codes. Only training on most frequent 2k - 5k codes (out of 70k) to reduce chance of no relevant
-        samples.
-        label_col (str): column with ICD codes
-    """
-
-    __slots__ = ("label_ids", "label_col", "supp_labels")
-
-    def __init__(self, checkpoint: str, cleaned_path: str, label_ids: dict[str:int], text_col: str, label_col: str, remove_sections:list[str]=None):
-        super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
-        self.label_ids = label_ids
-        self.label_col = label_col
-        supp_labels = [f"{label}0" for label in self.label_ids]
-        self.supp_labels = set(supp_labels)
-    
-    def filter_text_by_label(self, batch: dict[str, list[str]]) -> list[bool]:
-        """
-        Filtering method to check for the presence of one (or more) ICD labels that are being used during
-        training. To be used with dataset.filter() method
-
-        Args:
-            batch (dict[str:list[str]]): dataset batch being provided to check for label presence
-
-        Returns:
-            list[bool]: true if at least one label is present. filtered represents booleans that determine whether
-            a note stays or gets dropped. 
-        """
-        filtered = []
-        for icd_codes in batch[self.label_col]:
-            keep = icd_codes in self.label_ids or icd_codes in self.supp_labels
-            filtered.append(keep)
-        return filtered
-    
-    def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
-        """
-        Preprocess function to be mapped using dataset specific to code data as part of classification task.
-        To be used with dataset.map() method.
-
-        Args:
-            batch (dict[list[str]]): batch from dataset
-
-        Returns:
-            dict[str:list[int]]: Modified data in dataset. Text tokenized based on tokenizer.
-        """
-
-        codes = batch[self.label_col]
-        descriptions = batch[self.text_col]
-
-        processed_texts = [f"{code}: {desc}" for code, desc in zip(codes, descriptions)]
-
-        tokenized_data = self.tokenizer(processed_texts, truncation=True, max_length=512, return_tensors=None)
-
-        return tokenized_data
-    
-    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
-        """
-        Full preprocess steps for code encorder as part of classification.
-        Converts dataframe to a dataset. Filters samples without any applicable training labels.
-        Maps preprocess function. Finally, saves dataset to disk for reuse.
-
-        Args:
-            dataframe (pd.DataFrame): full dataframe for classification preprocessing
-        
-        Returns:
-            None
-        """
-        dataset = Dataset.from_pandas(dataframe)
-        print("Length of dataset pre filter:", len(dataset))
-
-        dataset = dataset.filter(self.filter_text_by_label, batched=True)
-        print("Length of dataset post filter:", len(dataset))
-        # dataset = dataset.map(self.preprocess_function, batched=True)
-        code2desc = dict(zip(dataset[self.label_col], dataset[self.text_col])) # mapping for later use
-        # print("Length of dataset post map:", len(dataset))
-        with open(f"data/cleaned_data/code_desc_map.json", "w") as f:
-            json.dump(code2desc, f)
-
-        if os.path.exists(self.cleaned_path):
-            logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
-        
-        clean_path = Path(self.cleaned_path)
-
-        # Deletes old dataset to prevent conflits
-        if os.path.exists(clean_path):
-            logger.info(f"Deleting old dataset at {clean_path}")
-            shutil.rmtree(path=clean_path)
-
-        dataset.save_to_disk(str(clean_path))
-
-        if save_dir:
-            self.tokenizer.save_pretrained(save_directory=save_dir)
-
+            
 
 
 class SummarizationPreprocessor(TextPreprocessor):
@@ -518,13 +419,13 @@ class SummarizationPreprocessor(TextPreprocessor):
 
     __slots__ = ("target_col", "source_type_col")
 
-    def __init__(self, checkpoint: str, text_col: str, target_col: str, source_type_col: str, cleaned_path: str, remove_sections: list[str] = None):
+    def __init__(self, checkpoint: str, text_col: str, target_col: str, source_type_col: str, cleaned_path: str, remove_sections: List[str] = None):
         super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.target_col = target_col
         self.source_type_col = source_type_col
 
     
-    def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[str]]:
+    def preprocess_function(self, batch: Dict[str, List[str]]) -> Dict[str, List[str]]:
         """
         Preprocess function to be mapped using dataset specific to summarization task.
         To be used with dataset.map() method.
@@ -592,7 +493,7 @@ class SummarizationTargetCreation(TextPreprocessor):
 
     __slots__ = ("extract_sections", "model", "device", "summarizer", "real_target_path", "synthetic_target_path")
 
-    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, real_target_path: str, synthetic_target_path: str, remove_sections: list[str] = None, extract_sections: list[str] = None):
+    def __init__(self, checkpoint: str, text_col: str, cleaned_path: str, real_target_path: str, synthetic_target_path: str, remove_sections: List[str] = None, extract_sections: List[str] = None):
         super().__init__(checkpoint=checkpoint, text_col=text_col, cleaned_path=cleaned_path, remove_sections=remove_sections)
         self.extract_sections = extract_sections
         self.real_target_path = real_target_path
@@ -601,8 +502,8 @@ class SummarizationTargetCreation(TextPreprocessor):
         self.device = 0 if torch.cuda.is_available() else -1
         self.summarizer = pipeline("summarization", model=self.model, tokenizer=self.tokenizer, device=self.device, batch_size=2)
 
-    
-    def extract_from_text(self, text: str, extract_section_list: list[str] = None) -> str | None:
+
+    def extract_from_text(self, text: str, extract_section_list: List[str] = None) -> str | None:
         """
         Helper function for extract_target. Extracts sections from text and returns them if they exist in a combined 
         format. (Only one should exist)
@@ -684,7 +585,7 @@ class SummarizationTargetCreation(TextPreprocessor):
         except Exception:
             return False
     
-    def summarize_batch(self, texts: list[str], max_length = 256, min_length = 30) -> list[str]:
+    def summarize_batch(self, texts: List[str], max_length: int = 256, min_length: int = 30) -> List[str]:
         """
         Provides a list of texts to the summarizing LLM and returns a decoded list of output summaries.
 
@@ -828,172 +729,6 @@ class SummarizationTargetCreation(TextPreprocessor):
         logger.info(f"Saving combined data to {self.cleaned_path}")
         combined_summary_dataset.to_parquet(self.cleaned_path)
 
-class IntentTargetingPreprocessor(TextPreprocessor):
-    """
-    Preprocessor for Intent Targeting. Goal to train model to predict whether intent for text is to summarize or ICD-10 code classify.
-
-    Attributes:
-    intent_prompts (dict[str: list[str]]): Series of correlated classification/summarization prompts to add to clinical notes.
-    label2id (None): encoding labels for each intent (saved for later use)
-    id2label (None): decoded labels relating to each intent (saved for later use)
-    """
-
-    __slots__ = ["intent_prompts", "label2id", "id2label"]
-
-    def __init__(self, checkpoint, text_col, cleaned_path, remove_sections = None):
-        super().__init__(checkpoint, text_col, cleaned_path, remove_sections)
-        self.intent_prompts = {
-            "summarization": [
-                "Summarize these notes:",
-                "Write a short summary of the following:",
-                "Can you provide a brief summary?",
-                "Give me a brief description of this patient's visit:",
-                "Can you shorten the following?",
-                "Describe these clinical notes:",
-                "How would you describe the patient's visit?",
-                "Based on this note, what happened?",
-                "What is the key takeaway from this note?",
-                "Describe the main points for this:"
-            ],
-            "classification": [
-                "Classify this note:",
-                "What ICD codes relate to this patient's visit?",
-                "Determine ICD codes based on the following text:",
-                "Codes associated with patient",
-                "Potential diagnosis for the following patient:",
-                "Please identify ICD codes for this visit:",
-                "ICD codes from note:",
-                "What labels should be assigned here?",
-                "Assign suitable categories for this note:",
-                "What labels would you apply to this patient's visit?"
-            ],
-            "neutral": [
-                "Process the following input:",
-                "Review the text below:",
-                "Consider the following note:",
-                "Analyze this record:",
-                "Read the following:"
-            ]
-        }
-        self.label2id = None
-        self.id2label = None
-
-    def prepend_random_prompt(self, sample: str) -> str:
-        """
-        Modified prepending function that provides the opportunity to add neutral prompts, opposite prompts, or no prompt at all.
-        Intended to help with model's ability to generalize.
-
-        Args:
-            sample (str): Individual text with an associated intent.
-
-        Returns:
-            str: Same text with a random prompt prepended or the same text
-        """
-        label = sample["label"]
-
-        if random.random() < 0.7: # 70% chance to add a prompt
-            choice_type = random.random()
-            # If prompt prepended, 50% chance to match with appropriate prompt, 25% for neutral prompt, and 25% for opposite prompt
-            if choice_type < 0.5:
-                pool = self.intent_prompts[label]
-            elif choice_type < 0.75:
-                pool = self.intent_prompts["neutral"]
-            else:
-                opposite = "classification" if label == "summarization" else "summarization"
-                pool = self.intent_prompts[opposite]
-            prompt = random.choice(pool)
-            return f"{prompt} {sample[self.text_col]}"
-        else:
-            return sample[self.text_col]
-
-    def preprocess_function(self, batch: dict[str, list[str]]) -> dict[str, list[int]]:
-        """
-        Preprocess function to be mapped using dataset specific to intent classification.
-        To be used with dataset.map() method.
-
-        Args:
-            batch (dict[list[str]]): batch from dataset
-
-        Returns:
-            dict[str:list[int]]: Modified data in dataset. Text field tokenized based on tokenizer.
-        """
-
-        processed_texts = []
-        for i in range(len(batch[self.text_col])):
-            sample = {
-                self.text_col: batch[self.text_col][i],
-                "label": batch["label"][i]
-            }
-            text = self.remove_blank_sections(sample[self.text_col])
-            text = self.normalize_deidentified_blanks(text)
-            text = self.prepend_random_prompt(sample)
-            processed_texts.append(text)
-        
-        tokenized = self.tokenizer(processed_texts, truncation=True, max_length=512)
-
-        tokenized["label"] = [self.label2id[intent] for intent in batch["label"]]
-
-        return tokenized
-    
-    def preprocess(self, dataframe: pd.DataFrame, save_dir: str = None) -> None:
-        """
-        Splits dataframe in half and applies either classification or summarization intent to each half at random. 
-        Then applies base preprocessing and prepends a correlating prompt based on intent.
-        Tokenizes input and labels and saves dataset to "cleaned" directory.
-
-        Args:
-            dataframe (pd.DataFrame): base data with clinical notes to preprocess for intent classification.
-            save_dir (str): save directory for tokenizer config
-        
-        Returns:
-            None
-        """
-
-        if self.text_col != "input":
-            dataframe.rename(columns={self.text_col: "input"}, inplace=True)
-            self.text_col = "input"
-        
-        dataframe["label"] = dataframe["input"].apply(
-            lambda _: random.choice(["classification", "summarization"])
-        )
-        
-        # half_df = dataframe.sample(frac=0.5, random_state=42).index
-
-        # dataframe["label"] = np.where(dataframe.index.isin(half_df), "classification", "summarization")
-
-        lable_encoder = LabelEncoder()
-        lable_encoder.fit(dataframe["label"])
-
-        self.label2id = dict(zip(lable_encoder.classes_, lable_encoder.transform(lable_encoder.classes_)))
-        self.id2label = {v: k for k, v in self.label2id.items()}
-
-        # Saving the label data for use with the model and for inference
-        with open("data\cleaned_data\intent_label2id.json", "w") as file:
-            self.label2id = {str(k): int(v) for k, v in self.label2id.items()}
-            json.dump(self.label2id, file)
-        
-        with open("data\cleaned_data\intent_id2label.json", "w") as file:
-            self.id2label = {int(k): str(v) for k, v in self.id2label.items()}
-            json.dump(self.id2label, file)
-        
-        dataset = Dataset.from_pandas(dataframe)
-
-        dataset = dataset.map(self.preprocess_function, batched=True)
-
-        if os.path.exists(self.cleaned_path):
-            logger.info(f"Warning: {self.cleaned_path} exists and will be overwritten with new cleaned dataset.")
-
-        clean_path = Path(self.cleaned_path)
-
-        # Deletes old dataset to prevent conflicts
-        if os.path.exists(clean_path):
-            logger.info(f"Deleting old dataset at {clean_path}")
-            shutil.rmtree(path=clean_path)
-
-        dataset.save_to_disk(str(clean_path))
-
-        if save_dir:
-            self.tokenizer.save_pretrained(save_directory=save_dir)
 
 class IntentDataPreprocessor:
     """
@@ -1022,7 +757,7 @@ class IntentDataPreprocessor:
             seed (int): seed for randomization
         
         Returns:
-            DatasetDict: HuggingFace compatible dataset dictionary for training
+            DatasetDict: Hugging Face compatible dataset dictionary for training
         """
 
         intent_data["label"] = intent_data["label"].map(self.label2id)

@@ -1,53 +1,16 @@
 """
 Script to create a series of prompts to train intent targetting model.
+
+Modification of original prompt creating preprocessor that uses premuation of verb phrases, modifiers, targets, and suffixes to create a diverse set of prompts
+along with ambiguous prompts, instead of prepending prompts to clinical notes. Added robustness and noise intended to make intent-targeting model better able
+to generalize.
 """
 
 import pandas as pd
 import random
 import itertools
 from data.fetch_data import load_data
-
-summarization_prompts = [
-                "Summarize these notes:",
-                "Write a short summary of the following:",
-                "Can you provide a brief summary?",
-                "Give me a brief description of this patient's visit:",
-                "Can you shorten the following?",
-                "Describe these clinical notes:",
-                "How would you describe the patient's visit?",
-                "Based on this note, what happened?",
-                "What is the key takeaway from this note?",
-                "Describe the main points for this:",
-                "Please summarize this note:",
-                "Give me a short version of this clinical note:",
-                "Summarize the following record:",
-                "Write a brief overview of this note:",
-                "Condense this patient report into a summary",
-                "Shorten this as best you can:",
-                "Please make this patient record briefer:",
-                ""
-]
-
-classification_prompts = [
-                "Classify this note:",
-                "What ICD codes relate to this patient's visit?",
-                "Determine ICD codes based on the following text:",
-                "Codes associated with patient",
-                "Potential diagnosis for the following patient:",
-                "Please identify ICD codes for this visit:",
-                "ICD codes from note:",
-                "What labels should be assigned here?",
-                "Assign suitable categories for this note:",
-                "What labels would you apply to this patient's visit?"
-]
-
-neutral_prompts = [
-                "Process the following input:",
-                "Review the text below:",
-                "Consider the following note:",
-                "Analyze this record:",
-                "Read the following:"
-]
+from typing import List
 
 class PromptCreator:
     """
@@ -84,9 +47,15 @@ class PromptCreator:
             "", "for me", "if possible", "when you can", "if you can", "please", "as soon as possible"
         ]
     
-    def _permute(self, verbs: list[str]) -> list[str]:
+    def _permute(self, verbs: List[str]) -> List[str]:
         """
         Builds list of unique NLP prompts for intent targeting
+
+        Args:
+            verbs (List[str]): list of task-specific verb phrases to use in prompt generation
+
+        Returns:
+            List[str]: list of unique prompts
         """
         prompts = set()
 
@@ -107,7 +76,7 @@ class PromptCreator:
         random.shuffle(prompts)
         return prompts
     
-    def generate_summarization_prompts(self, limit: int | None = None) -> list[str]:
+    def generate_summarization_prompts(self, limit: int | None = None) -> List[str]:
         """
         Generates prompts specific to summarization
 
@@ -119,8 +88,8 @@ class PromptCreator:
         """
         prompts = self._permute(self.summarize_verbs)
         return prompts[:limit] if limit else prompts
-    
-    def generate_classification_prompts(self, limit: int | None = None) -> list[str]:
+
+    def generate_classification_prompts(self, limit: int | None = None) -> List[str]:
         """
         Generates prompts specific to classification
 
@@ -132,6 +101,7 @@ class PromptCreator:
         """
         prompts = self._permute(self.classify_verbs)
         return prompts[:limit] if limit else prompts
+
 
 class NeutralPromptCreator:
     """
@@ -161,7 +131,7 @@ class NeutralPromptCreator:
             "", "for me", "if possible", "when you can", "if you can", "please", "as soon as possible"
         ]
     
-    def generate(self, limit: int | None = None) -> list[str]:
+    def generate(self, limit: int | None = None) -> List[str]:
         """
         Generates list of neutral-based prompts
 
@@ -189,6 +159,7 @@ class NeutralPromptCreator:
         random.shuffle(prompts)
 
         return prompts[:limit] if limit else prompts
+
 
 def create_intent_dataset(note_path: str, text_col: str, save_dir: str, limit: int | None = None) -> None:
     """
