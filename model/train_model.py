@@ -2,8 +2,7 @@
 Module to set up training tasks for all NLP models.
 """
 
-from pyexpat import model
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, AutoModel, TrainerCallback
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, DataCollatorWithPadding, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments, TrainerCallback
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
 from transformers.modeling_outputs import SequenceClassifierOutput
@@ -12,7 +11,7 @@ from transformers.modeling_utils import PreTrainedModel
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 from data.fetch_data import load_data
-from model.evaluate_model import classification_compute_metric, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback, CUDACleanupCallback, EpochLossCallback
+from model.evaluate_model import classification_compute_metric, intent_compute_metrics, rouge_metrics, MetricsLoggerCallback, CUDACleanupCallback
 from model.model_projection import SeqClassWProjection, Seq2SeqWProjection
 import torch
 import numpy as np
@@ -21,7 +20,7 @@ import logging
 import os
 from torch import Tensor
 from datasets import Dataset, DatasetDict
-from typing import Union, Dict, Tuple, List, Callable, Any, Type
+from typing import Dict, Tuple, List, Callable, Any, Type
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
