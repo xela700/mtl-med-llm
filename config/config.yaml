@@ -64,6 +64,7 @@ data:
   summarization_test_data: data/test_data/summarization_test_data
 
 model:
+  description: "Pretrained model checkpoints and paths for fine-tuned models"
   classification_checkpoint: dmis-lab/biobert-large-cased-v1.1
   summarization_checkpoint: GanjinZero/biobart-v2-large
   intent_checkpoint: distilbert/distilbert-base-uncased
@@ -80,6 +81,7 @@ model:
   intent_model: model/saved_model/ft-distilbert-base
 
 results:
+  description: "Paths to store results and reports from various experiments. Summarization results were created separately and are not included here."
   classification_w_code: results/reporting/classification_w_code
   classification_w_code_LORA_16: results/reporting/classification_w_code_LORA_16
   classification_w_code_w_MLP: results/reporting/classification_w_code_w_MLP
