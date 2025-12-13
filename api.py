@@ -1,5 +1,8 @@
 """
 API setup for demoing model pipeline
+
+Uses FastAPI to create a simple web interface for sending text to the model
+and receiving output.
 """
 
 import torch

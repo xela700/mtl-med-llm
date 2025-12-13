@@ -5,8 +5,9 @@ located in \"config/config.yaml\"
 
 import yaml
 from pathlib import Path
+from typing import Dict, List
 
-def load_config(path: str = "config/config.yaml") -> dict:
+def load_config(path: str = "config/config.yaml") -> Dict:
     """
     Loads YAML configuration as a dictionary
     """
@@ -19,7 +20,7 @@ def load_config(path: str = "config/config.yaml") -> dict:
         return yaml.safe_load(file)
 
 
-def verify_files(config: dict) -> list:
+def verify_files(config: Dict) -> List:
     """
     Verifies that the required model file exists.
     Will return a list of missing file names.

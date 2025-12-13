@@ -1,5 +1,7 @@
 """
-Script to extract metrics from training checkpoints.
+Script to extract metrics from training checkpoints. 
+
+Training metrics are not included repository.
 """
 
 from utils.config_loader import load_config
@@ -271,10 +273,6 @@ def modified_metrics(root_dir: str, task: str) -> None:
                             if metric == "epoch":
                                 continue
                             metrics_dict[method_type][metric].append((epoch, value))
-            
-            # epoch = int(''.join([c for c in file if c.isdigit()]))
-            # for metric, value in data.items():
-            #     metrics_dict[method_type][metric].append((epoch, value))
     
     for method in metrics_dict:
         for metric in metrics_dict[method]:
@@ -283,6 +281,17 @@ def modified_metrics(root_dir: str, task: str) -> None:
     return metrics_dict
 
 def plot_metric(metric_dict: str, metric_type: str, legend_loc: str="best", legend_font: str="medium") -> None:
+    """
+    Plots a specific metric across varying training methods. Uses JSON files to extract the data.
+    Args:
+        metric_dict (str): dictionary of metrics
+        metric_type (str): specific metric to plot
+        legend_loc (str): location of the legend on the plot
+        legend_font (str): font size of the legend
+
+    Returns:
+        None
+    """
     plt.figure(figsize=(8,5))
 
     for method, metrics in metric_dict.items():
@@ -299,9 +308,6 @@ def plot_metric(metric_dict: str, metric_type: str, legend_loc: str="best", lege
     plt.show()
 
 if __name__ == "__main__":
-    # classification_metrics()
-    # summarization_metrics()
-    # intent_metrics()
     metrics = modified_metrics("results/reporting", "classification2")
     plot_metric(metrics, "eval_roc_auc_micro", legend_font="x-small")
 
