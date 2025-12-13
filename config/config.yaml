@@ -80,6 +80,10 @@ model:
   intent_training_checkpoints: model/saved_model/ft-distilbert-base-checkpoints
   intent_model: model/saved_model/ft-distilbert-base
 
+  huggingface_classification_model: model/saved_model/huggingface_ft_biobert_large
+  huggingface_classification_repo: xela700/biobert_large_ft_multilabel_clinical_classification
+  huggingface_summarization_model: model/saved_model/huggingface_ft_biobart_large
+
 results:
   description: "Paths to store results and reports from various experiments. Summarization results were created separately and are not included here."
   classification_w_code: results/reporting/classification_w_code

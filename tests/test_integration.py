@@ -3,9 +3,7 @@ Testing module for both fetching and preprocessing data, to ensure proper output
 """
 
 from data import fetch_data
-from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor
-from datasets import Dataset
-import pandas as pd
+from data.preprocessing_data import ClassificationPreprocessor
 import logging
 import os
 

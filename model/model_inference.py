@@ -30,16 +30,17 @@ def classification_prediction(text: str) -> List[str]:
         list[str]: predicted ICD-10 codes in list format
     """
 
-    model_path = config["model"]["classification_model_temp"]
+    model_path = config["model"]["huggingface_classification_model"]
     code_desc_path = config["data"]["task_5"]["label_description_path"]
 
     with open(code_desc_path, "r") as file:
         code_descriptions = json.load(file)
 
     wrapper = SeqClassWProjection.load_custom(model_path)
+    base_model_id = getattr(wrapper.config, "base_model_name_or_path", config["model"]["classification_checkpoint"])
     model = wrapper
     model.eval()
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id)
 
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512).to(model.device)
 
@@ -75,7 +76,7 @@ def summarization_prediction(text: str) -> str:
     """
 
     base_model = config["model"]["summarization_checkpoint"]
-    model_path = config["model"]["summarization_model"]
+    model_path = config["model"]["huggingface_summarization_model"]
 
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 

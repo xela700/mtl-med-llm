@@ -6,7 +6,6 @@ from data.fetch_data import load_data
 from data.preprocessing_data import SummarizationTargetCreation
 from utils.config_loader import load_config
 from config.log_config import logging_setup
-import pandas as pd
 
 def test_generation() -> None:
     """

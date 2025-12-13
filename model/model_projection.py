@@ -14,6 +14,7 @@ from transformers.models.auto.configuration_auto  import AutoConfig
 from torch import Tensor
 from peft import PeftModel
 from typing import List, Dict
+from huggingface_hub import snapshot_download
 
 ######### Classification Wrapper #########
 class SeqClassWProjection(PreTrainedModel):
@@ -90,7 +91,7 @@ class SeqClassWProjection(PreTrainedModel):
 
         # Save config
         self.config.save_pretrained(save_directory)
-    
+
     @staticmethod
     def load_custom(save_directory: str) -> "SeqClassWProjection":
         """
@@ -102,13 +103,35 @@ class SeqClassWProjection(PreTrainedModel):
         Returns:
             CodelessWrapper: Loaded model instance
         """
+
+        def resolve_model_directory(path_or_repo: str) -> str:
+            """
+            Resolves the model path, if given a path instead of a repo.
+
+            Args:
+                path_or_repo (str): Model repo or local path
+        
+            Returns:
+                str: Local path to model directory
+            """
+            if os.path.isdir(path_or_repo):
+                return path_or_repo
+            return snapshot_download(
+                repo_id=path_or_repo,
+                repo_type="model"
+            )
+        
+        save_directory = resolve_model_directory(save_directory)
+
         # Load config
         config = AutoConfig.from_pretrained(save_directory)
         num_labels = config.num_labels
 
+        base_model_id = getattr(config, "base_model_name_or_path", "dmis-lab/biobert-large-cased-v1.1")
+
         # Load base encoder
         base_model = AutoModelForSequenceClassification.from_pretrained(
-            config._name_or_path,
+            base_model_id,
             config=config
         )
 
