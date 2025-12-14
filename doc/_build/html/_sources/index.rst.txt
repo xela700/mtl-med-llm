@@ -15,3 +15,7 @@ documentation for details.
    :maxdepth: 2
    :caption: Contents:
 
+   code_reference
+   data_pipeline
+   training_pipeline
+   inference_pipeline

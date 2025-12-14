@@ -29,3 +29,19 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = 'alabaster'
 html_static_path = ['_static']
+
+autodoc_mock_imports = [
+    "torch",
+    "transformers",
+    "peft",
+    "datasets",
+    "numpy",
+    "sklearn",
+    "matplotlib",
+    "evaluate",
+    "pyarrow",
+    "google",
+    "google.cloud",
+    "google.cloud.bigquery",
+    "huggingface_hub",
+]
