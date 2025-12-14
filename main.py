@@ -9,16 +9,13 @@ Training (with interim evaluation metrics) for classification and summarization
 import transformers
 transformers.logging.set_verbosity_error()
 import argparse
-import pandas as pd
-import os
 import json
 import logging
 from config.log_config import logging_setup
 from utils.config_loader import load_config
 from data.fetch_data import fetch_and_save_query, load_data
-from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentTargetingPreprocessor, CodePreprocessor, IntentDataPreprocessor
-from model.train_model import classification_model_training, summarization_model_training, intent_model_training, code_classification_model_setup
-from sklearn.model_selection import train_test_split
+from data.preprocessing_data import ClassificationPreprocessor, SummarizationPreprocessor, SummarizationTargetCreation, IntentDataPreprocessor
+from model.train_model import classification_model_training, summarization_model_training, intent_model_training
 from data.intent_prompt_data import create_intent_dataset
 
 logger = logging.getLogger(__name__)
@@ -70,33 +67,6 @@ def main(args: list[str]) -> None:
 
             preprocessor.preprocess(base_data)
         
-        elif args.target == "classification_code":
-            base_data = pd.read_csv(config["data"]["task_5"]["data_path"], header=None, sep='\t')
-            base_data[['labels', 'description']] = base_data[0].str.split(n=1, expand=True)
-            base_data['labels'].str.lstrip()
-            base_data['description'].str.lstrip()
-            clean_path = config["data"]["task_5"]["tokenized_path"]
-            label_map_path = config["data"]["task_2"]["label_map_path"]
-            checkpoint = config["model"]["classification_checkpoint"]
-            try:
-                with open(label_map_path) as f:
-                    mappings = json.load(f)
-            except FileNotFoundError:
-                logger.error("Label mappings do not yet exist. Preprocess base classification data first")
-            
-            label_ids = mappings["label2id"]
-            
-            preprocessor = CodePreprocessor(
-                checkpoint=checkpoint,
-                cleaned_path=clean_path,
-                label_ids=label_ids,
-                text_col='description',
-                label_col='labels'
-            )
-
-            preprocessor.preprocess(base_data)
-
-        
         elif args.target == "summary_generation": # Must be done before command "generation"
             base_data = load_data(config["data"]["task_3"]["data_path"])
             checkpoint = config["data"]["task_3"]["model"]
@@ -129,44 +99,7 @@ def main(args: list[str]) -> None:
 
             preprocessor.preprocess(base_data, save_dir=model_save_dir)
         
-        elif args.target == "intent_targeting":
-            # Modification to split data prior to preprocessing to avoid data leakage. Also upped samples to 5000 from 300.
-            intent_path = config["data"]["task_4"]["data_path"]
-            if os.path.exists(intent_path):
-                intent_data = load_data(config["data"]["task_4"]["data_path"])
-            else:
-                base_data = load_data(config["data"]["task_3"]["data_path"])
-                intent_data = base_data.sample(n=5000, random_state=42)
-                intent_data.to_parquet(intent_path)
-            
-            train_df, test_df = train_test_split(intent_data, test_size=0.2, random_state=42)
-            train_df, val_df = train_test_split(train_df, test_size=0.1, random_state=42)
-            
-            checkpoint = config["model"]["intent_checkpoint"]
-            train_clean_path = config["data"]["task_4"]["train_tokenized_path"]
-            val_clean_path = config["data"]["task_4"]["val_tokenized_path"]
-            test_clean_path = config["data"]["task_4"]["test_tokenized_path"]
-            
-            train_preprocessor = IntentTargetingPreprocessor(
-                checkpoint=checkpoint, 
-                text_col="discharge_note", 
-                cleaned_path=train_clean_path)
-            
-            val_preprocessor = IntentTargetingPreprocessor(
-                checkpoint=checkpoint, 
-                text_col="discharge_note", 
-                cleaned_path=val_clean_path)
-            
-            test_preprocessor = IntentTargetingPreprocessor(
-                checkpoint=checkpoint, 
-                text_col="discharge_note", 
-                cleaned_path=test_clean_path)
-
-            train_preprocessor.preprocess(train_df)
-            val_preprocessor.preprocess(val_df)
-            test_preprocessor.preprocess(test_df)
-        
-        elif args.target == "intent_targeting_mod": # Modified intent targeting preprocessing
+        elif args.target == "intent_targeting": # Modified intent targeting preprocessing
             intent_data = load_data(config["data"]["task_4"]["temp_intent_data_path"])
             label_dir = config["data"]["task_4"]["temp_intent_label_path"]
             intent_ds_path = config["data"]["task_4"]["temp_intent_dataset_path"]
@@ -276,19 +209,6 @@ def main(args: list[str]) -> None:
                 run_number=num_runs
                 )
         
-        elif args.target == "classification_code":
-            checkpoint = config["model"]["classification_checkpoint"]
-            code_label_map = config["data"]["task_2"]["label_map_path"]
-            label_desc = config["data"]["task_5"]["label_description_path"]
-            label_embeddings =config["data"]["task_5"]["label_embeddings_path"]
-
-            code_classification_model_setup(
-                checkpoint=checkpoint,
-                code_label_map=code_label_map,
-                code_desc_map=label_desc,
-                label_embeddings_dir=label_embeddings
-            )
-        
         elif args.target == "summarization":
             print(f"Running Summarization model for {args.num_runs} runs")
             for i in range(args.num_runs):
@@ -341,10 +261,10 @@ if __name__ == "__main__":
     generation_parser.add_argument("target", choices=["real", "synthetic", "synthetic_continue", "combine"], help="Specify target creation for summary task. Combine unites both types of targets into one dataset.")
 
     preprocess_parser = subparsers.add_parser("preprocess")
-    preprocess_parser.add_argument("target", choices=["classification_base", "classification_code", "summary_generation", "summarization", "intent_targeting", "intent_targeting_mod"], help="Specify which preprocess pipeline(s) to initiate")
+    preprocess_parser.add_argument("target", choices=["classification_base", "summary_generation", "summarization", "intent_targeting"], help="Specify which preprocess pipeline(s) to initiate")
 
     training_parser = subparsers.add_parser("training")
-    training_parser.add_argument("target", choices=["classification", "classification_code", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")
+    training_parser.add_argument("target", choices=["classification", "summarization", "intent_targeting"], help="Denote which training pipeline is being used.")
     training_parser.add_argument("num_runs", type=int, default=1, nargs="?", help="Number of runs the model will both train and evaluate (optional, default 1)")
 
     args = parser.parse_args()
