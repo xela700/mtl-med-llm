@@ -54,15 +54,29 @@ This project using tables from the larger MIMIC-IV datasets retrievable via cred
 
     pip install -r requirements.txt
 
-5. **Build Documentation (Optional)**
+## Documentation
 
-    sphinx-build -b html doc doc/_build/html
+Pre-built HTML documentation is included in this repository.
+
+To view it locaclly, open: doc/_build/html/index.html in any web browser.
+
+## Rebuild Documentation (Optional)
+
+If you modify documentation source files or want to regenerate the docs, you
+can rebuild them using Sphinx (included in requirements.txt)
+
+Steps from the project root:
+
+```bash
+cd doc
+python build_docs.py
+```
 
 ## Demo Setup
 
 1. Download [zip file](https://drive.google.com/drive/folders/1doxwTRtQGf887UEatIBVnhQ7jCc_1hRP?usp=drive_link) containing model components.
 
-2. Run:
+2. Run from project root:
 
 ```bash
 python scripts/demo_setup.py
