@@ -30,8 +30,8 @@ def classification_prediction(text: str) -> List[str]:
         list[str]: predicted ICD-10 codes in list format
     """
 
-    model_path = config["model"]["huggingface_classification_model"]
-    code_desc_path = config["data"]["task_5"]["label_description_path"]
+    model_path = config["model"]["current_classification_model"]
+    code_desc_path = os.path.join(model_path, "artifacts/code_desc_map.json")
 
     with open(code_desc_path, "r") as file:
         code_descriptions = json.load(file)
@@ -76,7 +76,7 @@ def summarization_prediction(text: str) -> str:
     """
 
     base_model = config["model"]["summarization_checkpoint"]
-    model_path = config["model"]["huggingface_summarization_model"]
+    model_path = config["model"]["current_summarization_model"]
 
     tokenizer = AutoTokenizer.from_pretrained(base_model)
 
@@ -109,12 +109,13 @@ def intent_prediction(text: str) -> str:
         str: Intent label (classification or summarization currently)
     """
 
-    model_path = config["model"]["intent_model"]
+    model_path = config["model"]["current_intent_model"]
+    id2label_path = os.path.join(model_path, "artifacts/intent_id2label.json")
 
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSequenceClassification.from_pretrained(model_path)
 
-    with open("data/cleaned_data/intent_id2label.json", "r") as file:
+    with open(id2label_path, "r") as file:
         id2label = {int(k): v for k, v in json.load(file).items()}
     
     inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(model.device)

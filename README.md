@@ -1,30 +1,32 @@
 # Modular Multi-Model Biomedical LLM
 
 This project aims to construct a multi-model LLM capable of handling distinct biomedical NLP tasks (ICD-10 code classification, clinical note summarization, etc.). 
-This project leverages publicly accessible LLMs available on HuggingFace as initial models for fine-tuning and testing.
+This project leverages publicly accessible LLMs available on Hugging Face as initial models for fine-tuning and testing.
+
+A major goal is to allow modular development on individual tasks by using targeted downstream LLMs specific to each task. An intent classifier head routes input to these models by labeling the user's intent from their prompt.
 
 ## Project Status
 
-This project is currently in development. Full-pipeline inference not currently available through github cloning. Data used for training restricted, as it requires credentialed access.
+This project is currently in development. Data used for training restricted, as it requires credentialed access. Demoing of the inference pipeline can be achieved by downloading the correct model components, as described below.
 
 Current NLP tasks: ICD-10 code classification and clinical note summarization
 
 ## Features Planned
 
-- [ ] Create demo available to pull from repository
-- [ ] Creation of an interface for inference
+- [x] Create demo available to pull from repository
+- [x] Creation of an interface for inference
 - [ ] Adding new biomedical NLP tasks
 
 ## Technologies Used
 
 - Python 3.11.5
-- HuggingFace Transformers
+- Hugging Face Transformers
 
 ## Dataset
 
-This project using tables from the larger MIMIC-IV datasets retrievable via credentialed access on PhysioNet. Datasets are not publicly available. Credentialed access to both MIMIC-IV base and MIMIC-IV-note are required to analyze project components at this time. Exact queries for data usage located in config/config.yaml.
+This project using tables from the larger MIMIC-IV datasets retrievable via credentialed access on PhysioNet. Datasets are not publicly available. Credentialed access to both MIMIC-IV base and MIMIC-IV-note are required to analyze project components at this time. Exact queries for data usage are located in config/config.yaml.
 
-## Setup Instructions
+## Environment Setup Instructions
 
 1. **Clone the repository**
 
@@ -55,6 +57,24 @@ This project using tables from the larger MIMIC-IV datasets retrievable via cred
 5. **Build Documentation (Optional)**
 
     sphinx-build -b html doc doc/_build/html
+
+## Demo Setup
+
+1. Download [zip file](https://drive.google.com/drive/folders/1doxwTRtQGf887UEatIBVnhQ7jCc_1hRP?usp=drive_link) containing model components.
+
+2. Run:
+
+```bash
+python scripts/demo_setup.py
+```
+
+3. Start the API:
+
+```bash
+uvicorn api:app
+```
+
+4. Once the application has finished startup, it can be found by copying "http://127.0.0.1:8000/" to any browser.
 
 ## Citations
 

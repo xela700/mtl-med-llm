@@ -27,6 +27,9 @@ tests/test_data
 *.csv
 *.arrow
 *.txt
+*.pt
+*.safetensors
+*.zip
 
 # --- Logs ---
 *.log
