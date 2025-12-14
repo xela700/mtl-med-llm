@@ -38,17 +38,23 @@ This project using tables from the larger MIMIC-IV datasets retrievable via cred
 
     (Only needed once.)
 
+    ```bash
     python -m venv venv
+    ```
 
 3. **Activate Virtual Environment**
 
     Linux/macOS:
 
+    ```
     source venv/bin/activate
+    ```
 
     Windows:
 
+    ```
     source venv/Scripts/activate
+    ```
 
 4. **PyTorch Installation**
 
@@ -74,10 +80,18 @@ This project using tables from the larger MIMIC-IV datasets retrievable via cred
 
 5. **Other Dependencies**
 
-    Remaining dependencies can be installed using:
+    Remaining dependencies can be installed depending on on desired use. Please note that, while the demo version of dependencies are designed to save time and resources, no other scripts in the project are guaranteed to run.
+    
+    All project dependencies:
 
     ```bash
     pip install -r requirements.txt
+    ```
+
+    Minimum required dependencies to run the inference demo:
+
+    ```bash
+    pip install -r requirements-demo.txt
     ```
 
 ## Documentation

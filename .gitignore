@@ -27,6 +27,8 @@ tests/test_data
 *.csv
 *.arrow
 *.txt
+!requirements.txt
+!requirements-demo.txt
 *.pt
 *.safetensors
 *.zip
