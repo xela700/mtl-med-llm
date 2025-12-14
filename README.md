@@ -112,7 +112,9 @@ pip install -r requirements-demo.txt
 
 1. Download [zip file](https://drive.google.com/drive/folders/1doxwTRtQGf887UEatIBVnhQ7jCc_1hRP?usp=drive_link) containing model components. 
 
-Place the zip file in the *project root directory* ./mtl-med-llm
+Place the zip file in the *project root directory* 
+
+~/mtl-med-llm
 
 2. Run from project root:
 
