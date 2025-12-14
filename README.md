@@ -26,73 +26,107 @@ Current NLP tasks: ICD-10 code classification and clinical note summarization
 
 This project using tables from the larger MIMIC-IV datasets retrievable via credentialed access on PhysioNet. Datasets are not publicly available. Credentialed access to both MIMIC-IV base and MIMIC-IV-note are required to analyze project components at this time. Exact queries for data usage are located in config/config.yaml.
 
+## Prerequisites
+
+- Python 3.10 or 3.11
+- pip (included with Python)
+- Git
+- (Optional) NVIDIA GPU with CUDA for GPU acceleration
+
 ## Environment Setup Instructions
 
 1. **Clone the repository**
 
-    ```bash
-    git clone https://github.com/xela700/mtl-med-llm.git
-    cd mtl-med-llm
+```bash
+git clone https://github.com/xela700/mtl-med-llm.git
+cd mtl-med-llm
+```
 
 2. **Create Virtual Environment**
 
-    (Only needed once.)
+(Only needed once.)
 
-    ```bash
-    python -m venv venv
-    ```
+```bash
+python -m venv venv
+```
 
 3. **Activate Virtual Environment**
 
-    Linux/macOS:
+Linux/macOS:
 
-    ```
-    source venv/bin/activate
-    ```
+```bash
+source venv/bin/activate
+```
 
-    Windows:
+Git Bash:
 
-    ```
-    source venv/Scripts/activate
-    ```
+```bash
+source venv/Scripts/activate
+```
 
-4. **PyTorch Installation**
+Powershell:
 
-    PyTorch is required for this system. This project was tested with PyTorch 2.7.1 with CUDA 12.6 GPU support on Python 3.11.5.
+```powershell
+.\venv\Scripts\Activate.ps1
+```
 
-    For inference and demo purposes, newer PyTorch versions are generally compatible. If you encounter issues, please install a PyTorch version from the 2.7 series using official PyTorch installation instructions.
+4. **PyTorch Installation (Required)**
 
-    GPU acceleration is optional and requires an NVIDIA GPU with CUDA support. Support methods for other GPUs, such as ROCm for AMD, may work but have not been tested.
+PyTorch is required for this system. This project was tested with PyTorch 2.7.1 with CUDA 12.6 GPU support on Python 3.11.5.
 
-    The exact version used for the projected can be installed using the below command:
+For inference and demo purposes, newer PyTorch versions are generally compatible. If you encounter issues, please install a PyTorch version from the 2.7 series using official PyTorch installation instructions.
 
-    ```bash
-    pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126
-    ```
+GPU acceleration is optional and requires an NVIDIA GPU with CUDA support. Support methods for other GPUs, such as ROCm for AMD, may work but have not been tested.
 
-    Other CUDA versions can be found in [PyTorch's Get Started](https://pytorch.org/get-started) resources.
+The exact version used for the projected can be installed using the below command:
 
-    CPU-only version of PyTorch can be installed using:
+```bash
+pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126
+```
 
-    ```bash
-    pip install torch
-    ```
+Other CUDA versions can be found in [PyTorch's Get Started](https://pytorch.org/get-started) resources.
 
-5. **Other Dependencies**
+CPU-only version of PyTorch can be installed using:
 
-    Remaining dependencies can be installed depending on on desired use. Please note that, while the demo version of dependencies are designed to save time and resources, no other scripts in the project are guaranteed to run.
+```bash
+pip install torch
+```
+
+5. **Other Dependencies (Pick One)**
+
+The remaining dependencies can be installed depending on the desired use. Please note that, while the demo version of dependencies are designed to save time and resources, no other scripts in the project are guaranteed to run.
     
-    All project dependencies:
+All project dependencies:
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+pip install -r requirements.txt
+```
 
-    Minimum required dependencies to run the inference demo:
+Minimum required dependencies to run the inference demo:
 
-    ```bash
-    pip install -r requirements-demo.txt
-    ```
+```bash
+pip install -r requirements-demo.txt
+```
+
+## Demo Setup
+
+1. Download [zip file](https://drive.google.com/drive/folders/1doxwTRtQGf887UEatIBVnhQ7jCc_1hRP?usp=drive_link) containing model components. 
+
+Place the zip file in the *project root directory* ./mtl-med-llm
+
+2. Run from project root:
+
+```bash
+python scripts/demo_setup.py
+```
+
+3. Start the API:
+
+```bash
+uvicorn api:app
+```
+
+4. Once the application has finished startup, it can be found by copying "http://127.0.0.1:8000/" to any browser.
 
 ## Documentation
 
@@ -111,24 +145,6 @@ Steps from the project root:
 cd doc
 python build_docs.py
 ```
-
-## Demo Setup
-
-1. Download [zip file](https://drive.google.com/drive/folders/1doxwTRtQGf887UEatIBVnhQ7jCc_1hRP?usp=drive_link) containing model components.
-
-2. Run from project root:
-
-```bash
-python scripts/demo_setup.py
-```
-
-3. Start the API:
-
-```bash
-uvicorn api:app
-```
-
-4. Once the application has finished startup, it can be found by copying "http://127.0.0.1:8000/" to any browser.
 
 ## Citations
 
