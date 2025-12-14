@@ -50,9 +50,35 @@ This project using tables from the larger MIMIC-IV datasets retrievable via cred
 
     source venv/Scripts/activate
 
-4. **Install Dependencies**
+4. **PyTorch Installation**
 
+    PyTorch is required for this system. This project was tested with PyTorch 2.7.1 with CUDA 12.6 GPU support on Python 3.11.5.
+
+    For inference and demo purposes, newer PyTorch versions are generally compatible. If you encounter issues, please install a PyTorch version from the 2.7 series using official PyTorch installation instructions.
+
+    GPU acceleration is optional and requires an NVIDIA GPU with CUDA support. Support methods for other GPUs, such as ROCm for AMD, may work but have not been tested.
+
+    The exact version used for the projected can be installed using the below command:
+
+    ```bash
+    pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126
+    ```
+
+    Other CUDA versions can be found in [PyTorch's Get Started](https://pytorch.org/get-started) resources.
+
+    CPU-only version of PyTorch can be installed using:
+
+    ```bash
+    pip install torch
+    ```
+
+5. **Other Dependencies**
+
+    Remaining dependencies can be installed using:
+
+    ```bash
     pip install -r requirements.txt
+    ```
 
 ## Documentation
 
