@@ -10,6 +10,8 @@ import numpy as np
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from transformers.utils import logging as hf_logging
+hf_logging.set_verbosity_error()
 from model.model_inference import model_routing_pipeline
 
 app = FastAPI(title="Biomedical Modular LLM")
