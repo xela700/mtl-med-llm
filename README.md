@@ -114,9 +114,9 @@ pip install -r requirements-demo.txt
 
 Place the demo_models.zip file in the *project root directory* 
 
-Do *NOT* rename the zip file, or the setup script will fail to recognize it.
-
 ~/mtl-med-llm
+
+Do *NOT* rename the zip file, or the setup script will fail to recognize it.
 
 2. Run from project root:
 
